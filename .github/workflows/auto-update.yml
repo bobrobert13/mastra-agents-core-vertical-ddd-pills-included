@@ -1,0 +1,34 @@
+name: Auto Update
+
+on:
+  schedule:
+    - cron: '0 2 * * 1'  # Every Monday at 2 AM
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      
+      - name: Update Mastra packages
+        run: |
+          chmod +x scripts/update-mastra.sh
+          ./scripts/update-mastra.sh
+      
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: 'chore: update Mastra packages'
+          title: 'chore: Update Mastra packages'
+          body: |
+            Automated update of Mastra packages to latest versions.
+            
+            This PR was created automatically by the auto-update workflow.
+          branch: chore/update-mastra-packages
+          labels: dependencies,automated

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base"
+  ],
+  "packageRules": [
+    {
+      "matchPackagePatterns": ["@mastra/*", "mastra"],
+      "groupName": "mastra packages",
+      "automerge": true,
+      "automergeType": "pr",
+      "matchUpdateTypes": ["minor", "patch"]
+    },
+    {
+      "matchPackagePatterns": ["*"],
+      "schedule": ["before 2am on monday"]
+    }
+  ],
+  "timezone": "America/Guayaquil",
+  "labels": ["dependencies"],
+  "assignees": [],
+  "reviewers": []
+}

@@ -1,0 +1,64 @@
+{
+  "name": "mastra-boilerplate",
+  "version": "1.0.0",
+  "description": "Self-updating Mastra boilerplate with vertical slicing architecture, high availability, and comprehensive testing",
+  "type": "module",
+  "scripts": {
+    "dev": "mastra dev",
+    "build": "mastra build",
+    "start": "mastra start",
+    "lint": "eslint src",
+    "lint:fix": "eslint src --fix",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\"",
+    "test": "vitest",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:evals": "vitest run tests/evals",
+    "test:smoke": "vitest run tests/smoke",
+    "test:all": "npm run test:unit && npm run test:integration && npm run test:evals",
+    "test:watch": "vitest watch",
+    "migrate": "node scripts/migrate-db.js",
+    "seed": "node scripts/seed-db.js",
+    "health-check": "bash scripts/health-check.sh",
+    "init": "bash scripts/init.sh",
+    "update": "bash scripts/update-mastra.sh",
+    "deploy:staging": "mastra deploy --env staging --yes",
+    "deploy:production": "mastra deploy --env production --yes"
+  },
+  "keywords": [
+    "mastra",
+    "ai-agents",
+    "typescript",
+    "boilerplate",
+    "vertical-slicing",
+    "ddd"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "dependencies": {
+    "@mastra/core": "^1.66.0",
+    "@mastra/evals": "^1.0.0",
+    "@mastra/libsql": "^1.22.5",
+    "@mastra/memory": "^1.0.0",
+    "@mastra/observability": "^1.0.0",
+    "@mastra/pg": "^1.0.0",
+    "mastra": "^1.29.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^22.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.18.0",
+    "@typescript-eslint/parser": "^8.18.0",
+    "eslint": "^9.16.0",
+    "eslint-config-prettier": "^9.1.0",
+    "prettier": "^3.4.2",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^3.0.0"
+  }
+}

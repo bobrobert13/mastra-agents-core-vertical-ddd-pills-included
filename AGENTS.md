@@ -1,0 +1,227 @@
+<!-- Generated: 2026-09-12 | Updated: 2026-09-12 -->
+# mastra-boilerplate
+
+## Purpose
+
+Project-agnostic Mastra boilerplate built on **vertical slicing / DDD**: four example agent domains, infrastructure that is **100% optional and env-driven**, high-availability Docker deployments, comprehensive testing (unit + integration + LLM evals), and a self-updating toolchain (Renovate + changesets + Mastra codemods). Clone it, delete the example domains you don't need, and start building.
+
+## Key Files
+
+| File | Description |
+|------|-------------|
+| `package.json` | Scripts, deps. **All `npm install` must use `--legacy-peer-deps`** (peer conflicts with @mastra/evals) |
+| `tsconfig.json` | TS strict mode; path aliases `@mastra/*` |
+| `eslint.config.js` | ESLint 9 **flat config** (`.eslintrc.json` is obsolete — do not recreate) |
+| `.env.example` | Every variable is OPTIONAL; app runs with zero config |
+| `vitest.config.ts` | Vitest 3.x (required by @mastra/evals) |
+| `AGENTS.md` | This file — hierarchical docs index |
+| `README.md` | Human-facing quickstart |
+| `PHASE-1-COMPLETION.md` / `PHASE-2-COMPLETION.md` / `PROJECT-COMPLETION.md` | Build-phase records |
+
+## Subdirectories
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/mastra/` | All source: domains + shared (see `src/mastra/AGENTS.md`) |
+| `tests/` | unit / integration / evals suites (see `tests/AGENTS.md`) |
+| `docker/` | Dockerfile + compose dev/prod HA (see `docker/AGENTS.md`) |
+| `scripts/` | init, health-check, self-update bash scripts (see `scripts/AGENTS.md`) |
+| `docs/` | ADRs, domain docs, testing guide (see `docs/AGENTS.md`) |
+| `.github/` | CI workflows + Renovate config |
+
+## Documentation Hierarchy (index)
+
+```
+AGENTS.md                        ← you are here (rules, conventions, updates, deploy)
+├── .github/AGENTS.md            ← CI gates + self-update pipeline
+├── docker/AGENTS.md             ← container/dev-HA/prod-HA deployment
+├── docs/AGENTS.md               ← ADR + domain docs conventions
+│   ├── adr/AGENTS.md
+│   └── domains/AGENTS.md
+├── scripts/AGENTS.md            ← operator bash scripts
+├── src/mastra/AGENTS.md         ← app composition
+│   ├── domains/AGENTS.md        ← vertical-slice rules
+│   │   ├── research/AGENTS.md
+│   │   ├── task-management/AGENTS.md
+│   │   ├── file-operations/AGENTS.md
+│   │   └── communication/AGENTS.md
+│   └── shared/AGENTS.md         ← logger, event bus, optional-infrastructure engine
+└── tests/AGENTS.md              ← test pyramid + known pitfalls
+```
+
+## How It Works — Optional Infrastructure
+
+**Rule: no env var ⇒ no error, the service is simply inactive.** All of it lives in `src/mastra/shared/config/infrastructure.ts`:
+
+| Service | Activated by | Fallback when unset |
+|---------|-------------|---------------------|
+| Storage: PostgreSQL | `DATABASE_URL` (starts with `postgres`) | — |
+| Storage: LibSQL custom | `LIBSQL_URL` (only if no DATABASE_URL) | — |
+| Storage: default | — | LibSQL local `file:./mastra.db` |
+| Multi-region | `ENABLE_MULTI_REGION=true` + Postgres | reported as ignored |
+| Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
+| Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
+| Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
+
+At startup the server prints a **service availability banner** (✅ active / ○ inactive per service). Keep it in sync when adding optional services.
+
+## For AI Agents
+
+### Working In This Directory
+- **Vertical slices**: everything a domain needs lives inside its folder. Domains NEVER import from other domains — cross-domain traffic goes through `shared/events/event-bus.ts`.
+- Only truly cross-cutting code goes in `src/mastra/shared/`.
+- Register new agents in `src/mastra/index.ts` (agents map) — storage/observability wiring is already automatic.
+- **Never hard-code infra requirements**: new services must follow the env-optional pattern above and report status in the banner.
+
+### Testing Requirements (before any commit)
+```bash
+npm run lint          # must be 0 errors / 0 warnings
+npm run test:all      # unit + integration + evals
+npm run build         # outputs .mastra/output/ (NOT dist/)
+timeout 15 npm run dev   # verify boot + banner, then kill
+```
+
+### GitHub Conventions
+- **Commits**: Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`, `ci:`). Subject ≤ 72 chars, imperative mood, body only when the *why* isn't obvious.
+- **Branches**: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`, `docs/<slug>`.
+- **PRs**: title follows commit convention; description = Summary bullets + Test plan checklist.
+- **CI gates** (`.github/workflows/ci.yml`): lint, build, test-unit, test-integration, test-evals. A PR is mergeable only when all pass.
+- Do not commit `.env`, `*.db*`, `.mastra/`, `node_modules/` (already gitignored).
+
+### Updating Dependencies (self-update system)
+- **Renovate** (`.github/renovate.json`) opens grouped PRs for `@mastra/*` and deps.
+- **`npm run update`** (`scripts/update-mastra.sh`) bumps all Mastra packages at once.
+- **Weekly codemod job** (`.github/workflows/auto-update.yml`) runs `npx @mastra/codemod@latest` and files an issue on findings.
+- **changesets** (`npx changeset`) records breaking/feature changes for release notes.
+- After ANY dependency bump, re-run the full test gate above.
+
+## Environment Gotchas (learned the hard way)
+
+1. `npm install` without `--legacy-peer-deps` fails with ERESOLVE (@mastra/evals ↔ vitest).
+2. Built-in Mastra tools (`webSearchTool`, etc.) only support OpenAI/Anthropic/Google/xAI — on any other provider write a custom tool (the DuckDuckGo `web-search.ts` in the research domain is the reference pattern).
+3. `Agent` class does NOT expose `tools`/`memory`/`instructions` publicly — unit tests can only assert `id`, `name`, `model`.
+4. `@mastra/core/scores` does not exist in current version — scorers use the per-domain pattern in `research/scorers/`.
+5. **Never hard-code a model string** — always `agentModel.<key>()` / `memoryModel()` from `shared/config/model.ts` (`provider/model-id` format, e.g. `deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731`, `anthropic/claude-sonnet-4-5`, `ollama/llama3.1`).
+6. `mastra build` writes to `.mastra/output/`; scripts referencing `dist/` are wrong.
+7. LibSQL does NOT implement the observability **feedback** methods (`listFeedback`, aggregates, write) — Studio's feedback tab 500s without `shared/config/libsql-feedback-compat.ts` being wired into every LibSQL instance. Full feedback surface = PostgreSQL only.
+
+## Development Workflow
+
+### Adding a New Domain
+1. Create `src/mastra/domains/<domain-name>/` with `agent.ts`, `tools/`, optional `workflows/`, `scorers/`, `entities/`, `events.ts`, `index.ts` (barrel exports).
+2. Register agent in `src/mastra/index.ts`.
+3. Add `tests/unit/domains/<domain>/`, `tests/evals/<domain>.eval.test.ts`.
+4. Document in `docs/domains/<domain>.md` and add an `AGENTS.md` for the domain folder.
+
+### Adding a New Tool
+1. `src/mastra/domains/<domain>/tools/<tool-name>.ts` with `createTool()` + Zod schemas.
+2. Use `logger` from `src/mastra/shared/logger.ts` — never raw `console.*` (no-console lint rule).
+3. Export from domain `index.ts`; add unit test.
+
+### Running Tests
+```bash
+npm run test:all        # everything
+npm run test:unit       # fast deterministic
+npm run test:integration
+npm run test:evals      # LLM-based, needs a provider API key
+npm run test:unit -- domains/research   # one area
+```
+
+## Common Patterns
+
+### Creating a Tool
+```typescript
+import { createTool } from '@mastra/core/tools';
+import { z } from 'zod';
+import { logger } from '../../../shared/logger';
+
+export const myTool = createTool({
+  id: 'my-tool',
+  description: 'What this tool does',
+  inputSchema: z.object({ param: z.string() }),
+  outputSchema: z.object({ result: z.string() }),
+  execute: async ({ param }) => {
+    try {
+      return { result: 'done' };
+    } catch (error) {
+      logger.error('Tool failed:', error);
+      throw error;
+    }
+  },
+});
+```
+
+### Creating an Agent
+```typescript
+import { Agent } from '@mastra/core/agent';
+import { Memory } from '@mastra/memory';
+import { agentModel, memoryModel } from '../../shared/config/model';
+
+export const myAgent = new Agent({
+  id: 'my-agent',
+  name: 'My Agent',
+  instructions: 'You are...',
+  model: agentModel.research(), // precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL
+  memory: new Memory({
+    options: {
+      observationalMemory: {
+        model: memoryModel(),
+      },
+    },
+  }),
+});
+```
+
+### Creating a Workflow
+```typescript
+import { createWorkflow, createStep } from '@mastra/core/workflows';
+import { z } from 'zod';
+
+const myStep = createStep({
+  id: 'my-step',
+  inputSchema: z.object({ input: z.string() }),
+  outputSchema: z.object({ output: z.string() }),
+  execute: async ({ inputData }) => ({ output: inputData.input }),
+});
+
+export const myWorkflow = createWorkflow({
+  id: 'my-workflow',
+  inputSchema: z.object({ input: z.string() }),
+  outputSchema: z.object({ output: z.string() }),
+}).then(myStep).commit();
+```
+
+## Deployment
+
+```bash
+# Dev (zero-config)
+npm run dev                        # Studio: http://localhost:4111
+
+# Docker dev (app + PostgreSQL w/ pgvector)
+cd docker && docker-compose up -d
+
+# Production HA (5 services: api, workers, postgres×2 regions, etc.)
+cd docker && docker-compose -f docker-compose.prod.yml up -d
+
+# Health check any deployment
+npm run health-check
+```
+
+Mastra Platform (optional): set `MASTRA_PLATFORM_ACCESS_TOKEN`, `MASTRA_PROJECT_ID`, `MASTRA_ORG_ID` then `npm run deploy:staging|production`.
+
+## Troubleshooting
+
+- **"This storage provider does not support listing feedback" (Studio, LibSQL mode)** ⇒ the compat shim in `src/mastra/shared/config/libsql-feedback-compat.ts` must be wired (it is, via `createLibSQLStorage` in `infrastructure.ts`). LibSQL persists only spans/traces; the full feedback surface (write + analytics) requires PostgreSQL `DATABASE_URL`.
+- **DB connection (SASL/auth) errors** ⇒ bad `DATABASE_URL`; app intentionally falls back to nothing else — unset it for LibSQL dev mode.
+- **HTTP 400 from a tool** ⇒ likely a built-in tool with an unsupported provider; write a custom tool.
+- **Port 4111 busy** ⇒ `pkill -f "mastra dev"`; the dev user controls server lifecycle.
+- **Worker duplication** ⇒ ensure only one scheduler instance (`MASTRA_WORKERS`).
+
+## Resources
+
+- [Mastra Documentation](https://mastra.ai/docs)
+- [Mastra Models](https://mastra.ai/models)
+- [Vertical Slice Architecture](https://jeremydmiller.com/2026-06-04/the-codebase-is-the-prompt-wolverine-vertical-slices-and-ai-assisted-development/)
+- [DDD for AI Agents](https://slavadubrov.github.io/blog/2025-10-20/domain-driven-design-ai-agents/)
+
+<!-- MANUAL: Any notes added below this line are preserved on regeneration -->

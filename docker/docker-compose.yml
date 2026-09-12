@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: mastra-postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-mastra_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+      POSTGRES_DB: ${DB_NAME:-mastra}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-mastra_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - mastra-network
+
+  mastra:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: mastra-app
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgresql://${DB_USER:-mastra_user}:${DB_PASSWORD:-password}@postgres:5432/${DB_NAME:-mastra}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MODEL=${MODEL:-}
+      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
+      - MASTRA_HOST=0.0.0.0
+      - MASTRA_PORT=4111
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "${MASTRA_PORT:-4111}:4111"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ../src:/app/src
+      - ../workspace:/app/workspace
+    networks:
+      - mastra-network
+    command: npm run dev
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  mastra-network:
+    driver: bridge

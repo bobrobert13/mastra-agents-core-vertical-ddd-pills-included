@@ -1,0 +1,40 @@
+{
+  "name": "research-dataset",
+  "description": "Test cases for research agent",
+  "version": "1.0.0",
+  "items": [
+    {
+      "id": "research-001",
+      "input": {
+        "query": "What is TypeScript?"
+      },
+      "groundTruth": {
+        "expectedAnswer": "TypeScript is a strongly typed programming language that builds on JavaScript",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-002",
+      "input": {
+        "query": "What is the weather in Quito?"
+      },
+      "groundTruth": {
+        "expectedAnswer": "Current weather information for Quito",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-003",
+      "input": {
+        "query": "Tell me about Mastra framework"
+      },
+      "groundTruth": {
+        "expectedAnswer": "Mastra is a TypeScript framework for building AI agents",
+        "requiredTools": ["web_search", "web_fetch"],
+        "minSources": 2
+      }
+    }
+  ]
+}

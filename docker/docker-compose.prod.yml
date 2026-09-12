@@ -1,0 +1,146 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
+    networks:
+      - mastra-network
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    environment:
+      - MASTRA_WORKERS=false
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MODEL=${MODEL:-}
+      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
+      - MASTRA_JWT_SECRET=${MASTRA_JWT_SECRET}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - ENABLE_TRACING=${ENABLE_TRACING:-true}
+    ports:
+      - "4111:4111"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4111/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      replicas: 3
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      - mastra-network
+
+  orchestration:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: mastra worker start orchestration
+    environment:
+      - MASTRA_WORKERS=orchestration
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MODEL=${MODEL:-}
+      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - api
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    networks:
+      - mastra-network
+
+  scheduler:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: mastra worker start scheduler
+    environment:
+      - MASTRA_WORKERS=scheduler
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - api
+    deploy:
+      replicas: 1  # Only one instance to prevent duplicate triggers
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+    networks:
+      - mastra-network
+
+  background:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    command: mastra worker start background
+    environment:
+      - MASTRA_WORKERS=background
+      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - MODEL=${MODEL:-}
+      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - api
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          cpus: '1'
+          memory: 2G
+    networks:
+      - mastra-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  mastra-network:
+    driver: bridge
