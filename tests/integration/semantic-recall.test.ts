@@ -17,8 +17,17 @@ import { createHashingEmbedder } from '../helpers/deterministic-embedder';
  * keyless-observable retrieval contract either way.
  */
 
-const FASTEMBED_CACHE = path.join(os.homedir(), '.cache', 'mastra', 'fastembed-models');
-const embedderWarm = existsSync(FASTEMBED_CACHE);
+const FASTEMBED_MODEL = path.join(
+  os.homedir(),
+  '.cache',
+  'mastra',
+  'fastembed-models',
+  'fast-multilingual-e5-large',
+  'model.onnx'
+);
+// Warm = the actual model file is present; the cache DIRECTORY existing with a
+// partial download is exactly the cold-cache case (root AGENTS.md gotcha #13).
+const embedderWarm = existsSync(FASTEMBED_MODEL);
 
 const msg = (id: string, text: string) => ({
   id,

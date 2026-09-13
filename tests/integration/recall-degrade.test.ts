@@ -106,7 +106,17 @@ describe('Scenario 4c — throwing embedder via the buildDomainMemory seam', () 
 
   const liveOffline =
     process.env.TEST_LIVE_OFFLINE_DEGRADE === 'true' &&
-    !existsSync(path.join(os.homedir(), '.cache', 'mastra', 'fastembed-models'));
+    // cold = model FILE absent (a directory with a partial download is still cold — gotcha #13)
+    !existsSync(
+      path.join(
+        os.homedir(),
+        '.cache',
+        'mastra',
+        'fastembed-models',
+        'fast-multilingual-e5-large',
+        'model.onnx'
+      )
+    );
 
   it.skipIf(!liveOffline)(
     'live: cold cache + unreachable storage.googleapis.com degrades the same way',
