@@ -4,42 +4,11 @@ CREATE EXTENSION IF NOT EXISTS vector;
 -- Create initial schema for Mastra storage
 -- Note: Mastra will create its own tables, but we can add custom tables here
 
--- Example: Table for embeddings (RAG support)
-CREATE TABLE IF NOT EXISTS embeddings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  content TEXT NOT NULL,
-  embedding vector(1536), -- OpenAI embedding dimension
-  metadata JSONB DEFAULT '{}',
-  domain VARCHAR(255),
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Create index for vector similarity search
-CREATE INDEX IF NOT EXISTS embeddings_vector_idx 
-ON embeddings USING ivfflat (embedding vector_cosine_ops)
-WITH (lists = 100);
-
--- Create index for domain filtering
-CREATE INDEX IF NOT EXISTS embeddings_domain_idx 
-ON embeddings(domain);
-
--- Create index for metadata queries
-CREATE INDEX IF NOT EXISTS embeddings_metadata_idx 
-ON embeddings USING GIN (metadata);
-
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ language 'plpgsql';
-
--- Trigger to auto-update updated_at
-CREATE TRIGGER update_embeddings_updated_at BEFORE UPDATE
-  ON embeddings FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+-- Vector tables are owned by PgVector.createIndex (mastra_<indexname>);
+-- the former hand-made vector demo table and all its dependents
+-- (indexes, trigger function, trigger) were removed by spec 03 §3.8 —
+-- a fixed-dimension table contradicts the local E5 embedder default and
+-- falls into the "declared but broken" defect class (see ADR-006).
 
 -- Example: Table for domain events
 CREATE TABLE IF NOT EXISTS domain_events (

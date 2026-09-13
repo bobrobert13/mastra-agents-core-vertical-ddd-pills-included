@@ -51,13 +51,16 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 
 ## How It Works — Optional Infrastructure
 
-**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `observability.ts`, `pubsub.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts`):
+**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `vectors.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts`, schedules reporting in `schedules.ts`):
 
 | Service | Activated by | Fallback when unset |
 |---------|-------------|---------------------|
 | Storage: PostgreSQL | `DATABASE_URL` (starts with `postgres`) | — |
 | Storage: LibSQL custom | `LIBSQL_URL` (only if no DATABASE_URL) | — |
 | Storage: default | — | LibSQL local `file:./mastra.db` |
+| Vector store | follows storage: `DATABASE_URL` postgres → PgVector; else LibSQLVector | always built unless `SEMANTIC_RECALL=off` (ADR-006) |
+| Semantic recall | embedder available (`EMBEDDING_MODEL` → ModelRouter; unset → local fastembed E5, key-free) | `○ Semantic recall  off (no embedder)` — generate unaffected, plain history only |
+| Knowledge RAG | same embedder condition | `index-knowledge` workflow + `search_knowledge` tool registered / `off (no embedder)` |
 | PubSub (workers HA) | `REDIS_URL` → Redis Streams (ADR-005; also bridges the domain event bus across processes) | in-process EventEmitterPubSub; split workers unavailable |
 | Auth (Server & Studio) | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN` → worker bearer via CompositeAuth) | dev: inert + ⚠️ UNAUTHENTICATED banner line; **production: FATAL exit(1)** unless `AUTH_DISABLED=true` (ADR-004) |
 | Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
@@ -114,6 +117,9 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 9. **Auth protects `/api/*` + Studio but NOT root `/health`** — defaults are protected `["/api/*"]`, public `["/api","/api/auth/*"]`, and `/health` lives at root, so the compose healthcheck keeps working unauthenticated. With `NODE_ENV=production` and no auth the process refuses to boot (`MASTRA_JWT_SECRET`, or the explicit `AUTH_DISABLED=true` escape hatch). A custom `server.apiPrefix` breaks those defaults — `buildAuth` rewrites protected/public from `MASTRA_API_PREFIX` and warns; any new root-level route is public by default. Studio login (JWT-capable) = Settings → Headers → `Authorization: Bearer <jwt>`.
 10. **Prod HA needs `REDIS_URL`** — split workers (orchestration/scheduler/backgroundTasks) do not start against the in-process default (docs); exactly ONE scheduler replica fleet-wide or every cron tick fires twice. The domain `eventBus` bridges cross-process ONLY when `REDIS_URL` is set (ADR-005); without it it is a single-process EventEmitter by design.
 11. **`MASTRA_WORKERS=false` silently disables schedules** — a workflow declaring `schedule` (daily-digest → row `wf_daily-digest`) registers but NEVER fires with all workers off; unset the var (dev auto-starts the in-process scheduler) or run one scheduler worker. Also: custom app tables (`app_tasks`) live beside Mastra's own and are created/migrated by the domain repo (`ensureSchema`, additive-only) — NOT by Mastra init/prune (ADR-008).
+12. **Sticky vector dimensions** — an index serves one embedder dimension forever. Memory's derived recall index is keyed by the PROBED DIMENSION (`memory_messages[_<dim>]`, indexName unset): cross-dim `EMBEDDING_MODEL` switch silently cold-resets recall (orphan old index — delete manually); same-dim switch (e.g. `text-embedding-3-small` → `ada-002`, both 1536d) silently MIXES vectors with no error. Treat embedder changes as re-index events; the knowledge workflow instead fail-fasts with `VectorDimensionMismatchError` (ADR-006).
+13. **fastembed first run downloads a model** — a multi-hundred-MB ONNX tarball from storage.googleapis.com into `~/.cache/mastra/fastembed-models`. Offline + cold cache ⇒ ONE canonical warn, recall OFF, process survives. Pre-warm CI with `warmup()` from `@mastra/fastembed` + cache-probe `skipIf` (pattern: `tests/integration/semantic-recall.test.ts`). Its native binary dep `@anush008/tokenizers` MUST stay in `bundler.externals` (set in `src/mastra/index.ts`) or `mastra build`/`mastra worker build` die on the `.node` analysis.
+14. **Recall works keyless; ANSWERING doesn't** — zero-key recall stores/recalls vectors fine (local E5), but `generate()` still 401s without a provider API key. Two different degradations with different banner lines — do not conflate them in tests or docs.
 
 ## Development Workflow
 

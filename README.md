@@ -106,6 +106,8 @@ Cross-domain communication is event-driven (ADR-003, superseded by [ADR-005](doc
 | Storage: PostgreSQL | `DATABASE_URL` (`postgres…`) | — |
 | Storage: LibSQL custom | `LIBSQL_URL` | — |
 | Storage: default | — | LibSQL `file:./mastra.db` |
+| Vector store + semantic recall | follows storage (`PgVector`/`LibSQLVector`); embedder = `EMBEDDING_MODEL` or local fastembed E5 (key-free) | `○ … off (no embedder)`; plain history only, `SEMANTIC_RECALL=off` kills it explicitly |
+| Knowledge RAG | embedder available | run `index-knowledge`, then the research agent answers with `search_knowledge` / off with no embedder |
 | PubSub (workers HA) | `REDIS_URL` → Redis Streams | in-process bus; split workers unavailable |
 | Auth (Server & Studio) | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN`) | dev: public + ⚠️ banner line; **prod: refuses to boot** unless `AUTH_DISABLED=true` |
 | Observability | on by default | `ENABLE_OBSERVABILITY=false` disables |

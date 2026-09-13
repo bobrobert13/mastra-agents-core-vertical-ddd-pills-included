@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { mastra } from '../../src/mastra';
+import { VECTOR_STORE_NAME } from '../../src/mastra/shared/config/vectors';
 
 /**
  * Smoke tier: proves the core promise of the boilerplate — the whole Mastra
@@ -28,5 +29,24 @@ describe('Mastra instance smoke', () => {
 
   it('has storage configured (env-optional fallback active)', () => {
     expect(mastra.getStorage()).toBeDefined();
+  });
+
+  // spec 03 (vectors/RAG/semantic recall) — zero-config boot must expose the
+  // vector store + the indexing workflow; the registry reads used by the
+  // degrade paths (listVectors/listTools) must never throw.
+  it('registers the index-knowledge workflow', () => {
+    const workflows = mastra.listWorkflows();
+    expect(workflows).toBeDefined();
+    expect(Object.keys(workflows!)).toContain('index-knowledge');
+  });
+
+  it('exposes the vector store under the mastra-vectors registry name', () => {
+    const vectors = mastra.listVectors();
+    expect(vectors).toBeDefined();
+    expect(Object.keys(vectors!)).toContain(VECTOR_STORE_NAME);
+  });
+
+  it('listTools() resolves without throwing (research resolver contract)', () => {
+    expect(() => mastra.listTools()).not.toThrow();
   });
 });

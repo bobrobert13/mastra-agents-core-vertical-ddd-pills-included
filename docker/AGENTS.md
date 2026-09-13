@@ -13,7 +13,7 @@ Container story: multi-stage image, single-host dev compose (app + PostgreSQL/pg
 | `Dockerfile` | Multi-stage, role-switched by `MASTRA_OUTPUT` build arg: `.mastra/output` (API, `mastra build`) or `.mastra/worker` (worker, `mastra worker build`); same runner, role selected via `MASTRA_WORKERS`; `node -e` HEALTHCHECK (no curl in node:22-alpine) |
 | `docker-compose.yml` | Dev: app + Postgres with pgvector; reads env with defaults so it also runs zero-config |
 | `docker-compose.prod.yml` | HA: api×3 + orchestration×2 + scheduler×1 + background-tasks×2 + postgres + redis:7-alpine (AOF, never host-published); shared env via `x-mastra-env`; workers `depends_on` api/redis healthy. Scheduler is single-instance — never scale (duplicate cron fires). Step execution is at-least-once: handlers must be idempotent; no DLQ |
-| `init.sql` | Creates pgvector extension, `embeddings` and `domain_events` tables for future RAG + event persistence |
+| `init.sql` | Creates pgvector extension + `domain_events` table (event persistence). Hand-made vector tables REMOVED by spec 03 §3.8 — `PgVector.createIndex` owns `mastra_<indexname>` tables (ADR-006) |
 
 ## For AI Agents
 

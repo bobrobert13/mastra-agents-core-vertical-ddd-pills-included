@@ -37,7 +37,7 @@ export const taskManagementAgent = new Agent({
 Your capabilities:
 - Create new tasks with priorities and due dates
 - Update existing tasks (status, priority, details)
-- Schedule tasks to run at specific intervals
+- Schedule recurring reminder prompts for tasks (a fire injects a prompt into this agent — it does not execute the task)
 
 When managing tasks:
 1. Understand the user's needs clearly

@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
-import { Memory } from '@mastra/memory';
 import { agentModel } from '../../shared/config/model';
+import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { readFileTool } from './tools/read-file';
@@ -54,10 +54,8 @@ Always be precise and cautious with file operations.`
     autoResumeSuspendedTools: true,
   },
   inputProcessors: [fileOperationsScopeGuard],
-  memory: new Memory({
-    options: {
-      generateTitle: true,
-    },
+  memory: buildDomainMemory({
+    generateTitle: true,
   }),
   tools: {
     read_file: readFileTool,

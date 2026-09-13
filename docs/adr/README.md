@@ -13,6 +13,7 @@ An Architecture Decision Record (ADR) captures a single architectural decision m
 - [ADR-003: Event-Driven Cross-Domain Communication](./003-event-driven.md) — **Superseded by ADR-005**
 - [ADR-004: Server & Studio Authentication](./004-auth-server-studio.md) — env-optional JWT, production fail-fast
 - [ADR-005: Cross-Process Eventing (env-optional Redis bridge)](./005-cross-process-eventing.md) — ack-on-every-delivery, at-least-once, no DLQ
+- [ADR-006: Vectors, Embedders & the Degrade Contract](./006-vectors-embeddings.md) — local-first E5 embedder, vector store mirrors storage, never-crash off-banner (extends ADR-002)
 - [ADR-008: Application Data in Mastra Storage Databases](./008-application-data-in-mastra-storage.md) — custom tables (`app_tasks`), domain-owned repositories, `AppDatabase` factory (006/007 reserved by specs 03/04)
 
 ## Template

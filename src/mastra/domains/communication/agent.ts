@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
-import { Memory } from '@mastra/memory';
 import { agentModel } from '../../shared/config/model';
+import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { askUserTool } from './tools/ask-user';
@@ -50,10 +50,8 @@ Always prioritize clear, effective communication.`
     autoResumeSuspendedTools: true,
   },
   inputProcessors: [communicationScopeGuard],
-  memory: new Memory({
-    options: {
-      generateTitle: true,
-    },
+  memory: buildDomainMemory({
+    generateTitle: true,
   }),
   tools: {
     ask_user: askUserTool,

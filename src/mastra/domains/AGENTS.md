@@ -14,6 +14,7 @@ Container for the four vertical slices. Each domain is self-contained: agent, to
 | `task-management/` | Task/schedule agent with Task entity and lifecycle events (see `task-management/AGENTS.md`) |
 | `file-operations/` | Filesystem agent: read/write/edit file tools (see `file-operations/AGENTS.md`) |
 | `communication/` | Minimal agent: structured `ask_user` tool (see `communication/AGENTS.md`) |
+| `knowledge/` | Chat-with-docs slice: `index-knowledge` workflow + `search_knowledge` tool — **no agent on purpose** (spec 03; see `knowledge/AGENTS.md`) |
 
 ## For AI Agents
 

@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
-import { Memory } from '@mastra/memory';
 import { agentModel, memoryModel } from '../../shared/config/model';
+import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { webSearchTool } from './tools/web-search';
@@ -54,17 +54,17 @@ Always provide accurate, up-to-date information with proper attribution.`
     autoResumeSuspendedTools: true,
   },
   inputProcessors: [researchScopeGuard],
-  memory: new Memory({
-    options: {
-      generateTitle: true,
-      observationalMemory: {
-        model: memoryModel(),
-      },
+  memory: buildDomainMemory({
+    generateTitle: true,
+    observationalMemory: {
+      model: memoryModel(),
     },
   }),
-  tools: {
-    web_search: webSearchTool,
-    web_fetch: webFetchTool,
-    summarize: summarizeTool,
+  tools: async ({ mastra }) => {
+    const base = { web_search: webSearchTool, web_fetch: webFetchTool, summarize: summarizeTool };
+    const registered = mastra?.listTools() ?? {}; // NON-THROWING read — getTool throws on a missing key (spec 03 §3.6)
+    return 'search_knowledge' in registered
+      ? { ...base, search_knowledge: registered.search_knowledge }
+      : base;
   },
 });

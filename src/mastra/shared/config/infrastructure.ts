@@ -4,6 +4,7 @@ import { buildStorage, type Storage } from './storage';
 import { buildObservability } from './observability';
 import { buildPubsub } from './pubsub';
 import { buildAuth, type AuthConfig } from './auth';
+import { buildVectors, type VectorResolution } from './vectors';
 import { attachEventBusBridge } from '../events';
 import { detectModelProviders, detectScopeGuard, hasAnyProviderKey } from './providers';
 import type { ServiceStatus, ServiceRegistry } from './service-status';
@@ -16,6 +17,7 @@ export interface Infrastructure {
   observability?: Observability;
   pubsub?: PubSub;
   auth?: AuthConfig;
+  vectors: VectorResolution;
   services: ServiceStatus[];
 }
 
@@ -29,6 +31,7 @@ export function buildInfrastructure(): Infrastructure {
   const services: ServiceRegistry = [];
 
   const storage = buildStorage(services);
+  const vectors = buildVectors(services);
   const observability = buildObservability(services);
   const pubsub = buildPubsub(services);
   attachEventBusBridge(pubsub);
@@ -36,5 +39,5 @@ export function buildInfrastructure(): Infrastructure {
   detectModelProviders(services);
   detectScopeGuard(services, hasAnyProviderKey());
 
-  return { storage, observability, pubsub, auth, services };
+  return { storage, vectors, observability, pubsub, auth, services };
 }

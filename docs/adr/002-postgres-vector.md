@@ -1,5 +1,7 @@
 # ADR-002: PostgreSQL with pgvector
 
+Updated: 2026-09-15 (see ADR-006)
+
 ## Status
 Accepted
 

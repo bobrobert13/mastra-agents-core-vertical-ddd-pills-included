@@ -1,0 +1,22 @@
+{
+  "name": "knowledge-chat-with-docs",
+  "fixture": "tests/fixtures/knowledge/onboarding.md",
+  "cases": [
+    {
+      "id": "laptop-budget",
+      "query": "What laptop budget do new hires get?",
+      "expectedChunkContains": "€2,000 laptop budget"
+    },
+    {
+      "id": "two-factor",
+      "query": "How must 2FA be set up?",
+      "expectedChunkContains": "authenticator app, not SMS"
+    },
+    {
+      "id": "vacation-cap",
+      "query": "How much vacation can I carry over?",
+      "expectedChunkContains": "capped at 21 days carried into the next year"
+    }
+  ],
+  "qualityBar": { "answerAccuracy": 8, "of": 10, "tier": "live", "skipIf": "no provider API key" }
+}
