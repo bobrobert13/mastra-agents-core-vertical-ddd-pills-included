@@ -51,14 +51,14 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 
 ## How It Works — Optional Infrastructure
 
-**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `observability.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts`):
+**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `observability.ts`, `pubsub.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts`):
 
 | Service | Activated by | Fallback when unset |
 |---------|-------------|---------------------|
 | Storage: PostgreSQL | `DATABASE_URL` (starts with `postgres`) | — |
 | Storage: LibSQL custom | `LIBSQL_URL` (only if no DATABASE_URL) | — |
 | Storage: default | — | LibSQL local `file:./mastra.db` |
-| Multi-region | `ENABLE_MULTI_REGION=true` + Postgres | reported as ignored |
+| PubSub (workers HA) | `REDIS_URL` → Redis Streams (ADR-005; also bridges the domain event bus across processes) | in-process EventEmitterPubSub; split workers unavailable |
 | Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
 | Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
 | Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
@@ -215,7 +215,7 @@ npm run dev                        # Studio: http://localhost:4111
 # Docker dev (app + PostgreSQL w/ pgvector)
 cd docker && docker-compose up -d
 
-# Production HA (5 services: api, workers, postgres×2 regions, etc.)
+# Production HA (api×3, orchestration×2, scheduler×1, background-tasks×2, postgres, redis)
 cd docker && docker-compose -f docker-compose.prod.yml up -d
 
 # Health check any deployment
@@ -230,7 +230,8 @@ Mastra Platform (optional): set `MASTRA_PLATFORM_ACCESS_TOKEN`, `MASTRA_PROJECT_
 - **DB connection (SASL/auth) errors** ⇒ bad `DATABASE_URL`; app intentionally falls back to nothing else — unset it for LibSQL dev mode.
 - **HTTP 400 from a tool** ⇒ likely a built-in tool with an unsupported provider; write a custom tool.
 - **Port 4111 busy** ⇒ `pkill -f "mastra dev"`; the dev user controls server lifecycle.
-- **Worker duplication** ⇒ ensure only one scheduler instance (`MASTRA_WORKERS`).
+- **Worker duplication** ⇒ run exactly ONE scheduler (`MASTRA_WORKERS=scheduler`, compose `replicas: 1`); never scale it — multiple schedulers fire every cron tick twice. Orchestration/backgroundTasks DO scale horizontally (consumer groups).
+- **Split workers not starting** ⇒ `REDIS_URL` missing: distributed PubSub is a hard requirement of the split topology (ADR-005); without it Mastra keeps the in-process bus and workers serve nothing cross-process.
 
 ## Resources
 

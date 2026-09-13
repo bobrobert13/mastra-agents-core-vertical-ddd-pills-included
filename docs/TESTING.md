@@ -234,10 +234,10 @@ Real pipeline: `.github/workflows/ci.yml` (source of truth — keep this summary
 | Job | Runs | Notes |
 |---|---|---|
 | `lint` | `npm run lint` | ESLint with `--max-warnings=0` (0 errors / 0 warnings enforced) |
-| `build` | `npm run build` | needs lint |
+| `build` | `npm run build:all` | needs lint; builds API + worker artifacts, asserts `.mastra/worker/index.mjs` |
 | `test-smoke` | `npm run test:smoke` | **no env block on purpose** — proves zero-config boot |
 | `test-unit` | `npm run test:unit` | deterministic |
-| `test-integration` | `npm run test:integration` | Postgres 16 service + `DATABASE_URL` |
+| `test-integration` | `npm run test:integration` | Postgres 16 + `DATABASE_URL`; Redis 7 service + `REDIS_URL` (skips pubsub tests when unset) |
 | `test-evals` | `npm run test:evals` | structural, offline-safe; optional `DEEPINFRA_API_KEY` secret |
 
 Workflow-level `env: npm_config_legacy_peer_deps: 'true'` makes `npm ci` match the committed lockfile's resolution (see root `AGENTS.md` gotcha #1).

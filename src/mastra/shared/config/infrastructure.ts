@@ -1,6 +1,9 @@
 import type { Observability } from '@mastra/observability';
+import type { PubSub } from '@mastra/core/events';
 import { buildStorage, type Storage } from './storage';
 import { buildObservability } from './observability';
+import { buildPubsub } from './pubsub';
+import { attachEventBusBridge } from '../events';
 import { detectModelProviders, detectScopeGuard, hasAnyProviderKey } from './providers';
 import type { ServiceStatus, ServiceRegistry } from './service-status';
 
@@ -10,6 +13,7 @@ export type { Storage } from './storage';
 export interface Infrastructure {
   storage: Storage;
   observability?: Observability;
+  pubsub?: PubSub;
   services: ServiceStatus[];
 }
 
@@ -24,8 +28,10 @@ export function buildInfrastructure(): Infrastructure {
 
   const storage = buildStorage(services);
   const observability = buildObservability(services);
+  const pubsub = buildPubsub(services);
+  attachEventBusBridge(pubsub);
   detectModelProviders(services);
   detectScopeGuard(services, hasAnyProviderKey());
 
-  return { storage, observability, services };
+  return { storage, observability, pubsub, services };
 }

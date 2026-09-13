@@ -8,8 +8,8 @@ Project-agnostic starter for AI agents built on [Mastra](https://mastra.ai): ver
 - **Vertical Slicing / DDD** — 4 reference domains (research, task-management, file-operations, communication), each self-contained: agent, tools, workflows, scorers, entities, events. Domains never import each other; cross-domain traffic goes through a typed event bus.
 - **Provider-agnostic models** — no model string is hard-coded. Choose via env: `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL` (any `provider/model-id` the [Mastra model router](https://mastra.ai/models) supports).
 - **Scope-dedicated agents** — every domain agent is hard-guarded: an LLM classifier aborts off-topic input *before the model runs* and answers with a one-line redirect to the right agent (instructions template + `createScopeGuard`; `SCOPE_GUARD=off` disables, inert without a key).
-- **Env-optional infrastructure** — PostgreSQL (+pgvector for future RAG) with LibSQL fallback, multi-region replication toggle, observability with storage exporter and sensitive-data filter.
-- **High Availability** — multi-stage Dockerfile and a production compose with separated workers (API / orchestration / scheduler / background / PostgreSQL).
+- **Env-optional infrastructure** — PostgreSQL (+pgvector for future RAG) with LibSQL fallback, Redis Streams PubSub for distributed workers, observability with storage exporter and sensitive-data filter.
+- **High Availability** — role-switched multi-stage Dockerfile and a production compose with split workers (API×3 / orchestration×2 / scheduler×1 / backgroundTasks×2 / PostgreSQL / Redis 7).
 - **Layered testing** — smoke (zero-config boot), unit, cross-domain integration, structural evals; enforced in CI on every push/PR.
 - **Self-updating** — Renovate PRs, `npm run update` (all `@mastra/*` bumped + full gate), weekly Mastra codemod job.
 - **Hierarchical agent docs** — 15 `AGENTS.md` files documenting rules, deploys, conventions and gotchas for AI coding agents.
@@ -97,7 +97,7 @@ src/mastra/
     └── logger.ts             #   level-filtered logger (LOG_LEVEL)
 ```
 
-Cross-domain communication is event-driven (`docs/adr/003-event-driven.md`). To add a capability: create a new domain folder, register its agent/workflow in `src/mastra/index.ts`, done — nothing else changes.
+Cross-domain communication is event-driven (ADR-003, superseded by [ADR-005](docs/adr/005-cross-process-eventing.md): in-process by default, Redis bridge when `REDIS_URL` is set). To add a capability: create a new domain folder, register its agent/workflow in `src/mastra/index.ts`, done — nothing else changes.
 
 ### Env-optional services
 
@@ -106,7 +106,7 @@ Cross-domain communication is event-driven (`docs/adr/003-event-driven.md`). To 
 | Storage: PostgreSQL | `DATABASE_URL` (`postgres…`) | — |
 | Storage: LibSQL custom | `LIBSQL_URL` | — |
 | Storage: default | — | LibSQL `file:./mastra.db` |
-| Multi-region | `ENABLE_MULTI_REGION=true` + Postgres | reported as inactive |
+| PubSub (workers HA) | `REDIS_URL` → Redis Streams | in-process bus; split workers unavailable |
 | Observability | on by default | `ENABLE_OBSERVABILITY=false` disables |
 | Model providers | any `*_API_KEY` | app boots; generation fails clearly |
 | Model selection | `MODEL_<AGENT>` / `MODEL` / `DEFAULT_MODEL` | built-in default |
@@ -150,10 +150,10 @@ Details: `docs/TESTING.md`.
 ```bash
 cd docker
 docker-compose up -d                                # dev: app + PostgreSQL/pgvector
-docker-compose -f docker-compose.prod.yml up -d     # HA: api, workers, scheduler, background, postgres
+docker-compose -f docker-compose.prod.yml up -d     # HA: api×3, orchestration×2, scheduler×1, background-tasks×2, postgres, redis
 ```
 
-Multi-region is the same prod compose with `ENABLE_MULTI_REGION=true` + region vars (see `.env.example`); the replication config is applied by `shared/config/storage.ts`.
+Production HA runs a genuinely distributed stack: Redis 7 (AOF; Redis Streams PubSub — never host-exposed) is required for split workers; events cross processes via the bridge (at-least-once, ADR-005); unacknowledged events survive API/Redis restarts; there is no DLQ — stuck runs stay observable in storage. Zero-config `npm run dev` remains untouched.
 
 ## 🔄 Auto-update
 

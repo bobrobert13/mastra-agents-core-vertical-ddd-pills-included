@@ -10,7 +10,7 @@ import { fileOperationsAgent } from './domains/file-operations';
 import { communicationAgent } from './domains/communication';
 
 // All infrastructure is optional and driven by env vars (see shared/config/infrastructure.ts)
-const { storage, observability, services } = buildInfrastructure();
+const { storage, observability, pubsub, services } = buildInfrastructure();
 
 export const mastra = new Mastra({
   agents: {
@@ -24,6 +24,7 @@ export const mastra = new Mastra({
   },
   storage,
   ...(observability && { observability }),
+  ...(pubsub && { pubsub }),
   server: {
     port: parseInt(process.env.MASTRA_PORT || '4111', 10),
     host: process.env.MASTRA_HOST || '0.0.0.0',

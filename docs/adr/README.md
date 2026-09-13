@@ -10,7 +10,8 @@ An Architecture Decision Record (ADR) captures a single architectural decision m
 
 - [ADR-001: Vertical Slicing Architecture](./001-vertical-slicing.md)
 - [ADR-002: PostgreSQL with pgvector](./002-postgres-vector.md)
-- [ADR-003: Event-Driven Cross-Domain Communication](./003-event-driven.md)
+- [ADR-003: Event-Driven Cross-Domain Communication](./003-event-driven.md) — **Superseded by ADR-005**
+- [ADR-005: Cross-Process Eventing (env-optional Redis bridge)](./005-cross-process-eventing.md) — ack-on-every-delivery, at-least-once, no DLQ
 
 ## Template
 

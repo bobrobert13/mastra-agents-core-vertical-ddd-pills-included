@@ -1,5 +1,33 @@
 version: '3.8'
 
+# Shared environment for every process built on the composition root
+# (storage/observability/pubsub all read these). MASTRA_JWT_SECRET is a
+# cross-spec (01) passthrough: 01's production fail-fast kills EVERY process
+# sharing the composition root — workers included; they serve no client
+# routes, so auth config there is harmless.
+x-mastra-env: &mastra-env
+  DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+  REDIS_URL: redis://redis:6379
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  MASTRA_JWT_SECRET: ${MASTRA_JWT_SECRET:-}
+
+# Worker role: same runner, worker artifact, role selected via MASTRA_WORKERS.
+x-worker: &worker
+  build:
+    context: ..
+    dockerfile: docker/Dockerfile
+    args:
+      MASTRA_OUTPUT: .mastra/worker
+
+# Model/API keys passed through to workers — they execute agent-backed steps.
+x-model-env: &model-env
+  DEEPINFRA_API_KEY: ${DEEPINFRA_API_KEY:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+  GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+  MODEL: ${MODEL:-}
+  OBSERVATIONAL_MEMORY_MODEL: ${OBSERVATIONAL_MEMORY_MODEL:-}
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
@@ -26,35 +54,46 @@ services:
     networks:
       - mastra-network
 
+  redis:
+    image: redis:7-alpine # >= 7.0 required by RedisStreamsPubSub (xAutoClaim reclaim)
+    command: ["redis-server", "--appendonly", "yes"] # unacked events must survive redis restart (crash recovery)
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    # deliberately NO ports: 6379 is never host-exposed
+    networks:
+      - mastra-network
+
   api:
     build:
       context: ..
       dockerfile: docker/Dockerfile
     environment:
-      - MASTRA_WORKERS=false
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - MODEL=${MODEL:-}
-      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
-      - MASTRA_JWT_SECRET=${MASTRA_JWT_SECRET}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - ENABLE_TRACING=${ENABLE_TRACING:-true}
+      <<: [*mastra-env, *model-env]
+      MASTRA_WORKERS: "false"
+      MASTRA_WORKER_AUTH_TOKEN: ${MASTRA_WORKER_AUTH_TOKEN:-} # passthrough; consumed by Spec 01 auth
+      ENABLE_TRACING: ${ENABLE_TRACING:-true}
     ports:
       - "4111:4111"
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4111/health"]
+      # node:22-alpine has no curl — a curl test would never pass and every
+      # worker `depends_on: api service_healthy` would hang forever.
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:4111/health',(r)=>{process.exit(r.statusCode===200?0:1)})"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     deploy:
-      replicas: 3
+      replicas: 3 # now actually meaningful: signals/resumable streams fan out over Redis
       resources:
         limits:
           cpus: '1'
@@ -66,24 +105,19 @@ services:
       - mastra-network
 
   orchestration:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: mastra worker start orchestration
+    <<: *worker
     environment:
-      - MASTRA_WORKERS=orchestration
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - MODEL=${MODEL:-}
-      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      <<: [*mastra-env, *model-env]
+      MASTRA_WORKERS: orchestration
+      MASTRA_STEP_EXECUTION_URL: http://api:4111/api # step dispatch hops back to the API
+      MASTRA_WORKER_AUTH_TOKEN: ${MASTRA_WORKER_AUTH_TOKEN:-}
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
-      replicas: 2
+      replicas: 2 # PubSub consumer groups distribute work across replicas
       resources:
         limits:
           cpus: '1'
@@ -92,18 +126,17 @@ services:
       - mastra-network
 
   scheduler:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: mastra worker start scheduler
+    <<: *worker
     environment:
-      - MASTRA_WORKERS=scheduler
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      <<: *mastra-env
+      MASTRA_WORKERS: scheduler
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
-      replicas: 1  # Only one instance to prevent duplicate triggers
+      replicas: 1 # NEVER scale: multiple schedulers = duplicate fires per cron tick
       resources:
         limits:
           cpus: '0.5'
@@ -111,23 +144,16 @@ services:
     networks:
       - mastra-network
 
-  background:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    command: mastra worker start background
+  background-tasks:
+    <<: *worker
     environment:
-      - MASTRA_WORKERS=background
-      - DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
-      - DEEPINFRA_API_KEY=${DEEPINFRA_API_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
-      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
-      - MODEL=${MODEL:-}
-      - OBSERVATIONAL_MEMORY_MODEL=${OBSERVATIONAL_MEMORY_MODEL:-}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
+      <<: [*mastra-env, *model-env]
+      MASTRA_WORKERS: backgroundTasks # invalid "background" would WARN-and-serve-nothing
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       replicas: 2
       resources:
@@ -139,6 +165,8 @@ services:
 
 volumes:
   postgres_data:
+    driver: local
+  redis_data:
     driver: local
 
 networks:

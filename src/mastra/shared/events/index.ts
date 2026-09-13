@@ -1,1 +1,1 @@
-export { eventBus } from './event-bus';
+export { eventBus, attachEventBusBridge, DOMAIN_EVENTS_TOPIC } from './event-bus';
