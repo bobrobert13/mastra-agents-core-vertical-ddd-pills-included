@@ -1,11 +1,12 @@
 import { Mastra } from '@mastra/core/mastra';
 
 import { buildInfrastructure } from './shared/config/infrastructure';
+import { detectSchedules } from './shared/config/schedules';
 import { logServiceAvailability } from './shared/config/service-status';
 
 // Import domains
 import { researchAgent, deepResearchWorkflow } from './domains/research';
-import { taskManagementAgent } from './domains/task-management';
+import { taskManagementAgent, dailyDigestWorkflow } from './domains/task-management';
 import { fileOperationsAgent } from './domains/file-operations';
 import { communicationAgent } from './domains/communication';
 
@@ -32,6 +33,7 @@ export const mastra = new Mastra({
   },
   workflows: {
     'deep-research': deepResearchWorkflow,
+    'daily-digest': dailyDigestWorkflow,
   },
   storage,
   ...(observability && { observability }),
@@ -39,4 +41,5 @@ export const mastra = new Mastra({
   server: serverConfig,
 });
 
+detectSchedules(services, mastra);
 logServiceAvailability(services);

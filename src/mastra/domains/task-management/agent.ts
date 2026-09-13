@@ -1,6 +1,6 @@
 import { Agent } from '@mastra/core/agent';
-import { Memory } from '@mastra/memory';
 import { agentModel, memoryModel } from '../../shared/config/model';
+import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { createTaskTool } from './tools/create-task';
@@ -54,12 +54,10 @@ Always be organized and precise with task details.`
     autoResumeSuspendedTools: true,
   },
   inputProcessors: [taskManagementScopeGuard],
-  memory: new Memory({
-    options: {
-      generateTitle: true,
-      observationalMemory: {
-        model: memoryModel(),
-      },
+  memory: buildDomainMemory({
+    generateTitle: true,
+    observationalMemory: {
+      model: memoryModel(),
     },
   }),
   tools: {

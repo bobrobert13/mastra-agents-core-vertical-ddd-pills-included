@@ -35,5 +35,20 @@ export interface TaskScheduledEvent {
   };
 }
 
+export interface TasksDigestReadyEvent {
+  type: 'tasks.digest.ready';
+  payload: {
+    date: string;
+    resourceId: string;
+    openCount: number;
+    lines: string[];
+    timestamp: Date;
+  };
+}
+
 export type TaskEvent =
-  TaskCreatedEvent | TaskUpdatedEvent | TaskCompletedEvent | TaskScheduledEvent;
+  | TaskCreatedEvent
+  | TaskUpdatedEvent
+  | TaskCompletedEvent
+  | TaskScheduledEvent
+  | TasksDigestReadyEvent;

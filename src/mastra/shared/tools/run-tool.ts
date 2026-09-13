@@ -1,4 +1,5 @@
 import { MastraError, ErrorDomain, ErrorCategory } from '@mastra/core/error';
+import type { ToolExecutionContext } from '@mastra/core/tools';
 
 /**
  * Minimal structural view of a Mastra Tool for direct execution.
@@ -13,10 +14,15 @@ interface ExecutableTool {
  * Directly invoke a tool's execute function (workflows, tests).
  * Agents should keep calling tools through the model loop — this helper
  * exists for deterministic step-level composition and unit tests.
+ *
+ * `contextOverrides` (spec 05, additive): merge extra ToolExecutionContext
+ * fields — e.g. `{ mastra: ... }` or `{ agent: { resourceId } }` — on top of
+ * the synthesized direct-call context. Omitted = previous behavior.
  */
 export async function runTool<TOutput extends object>(
   tool: ExecutableTool,
-  inputData: Record<string, unknown>
+  inputData: Record<string, unknown>,
+  contextOverrides?: Partial<ToolExecutionContext>
 ): Promise<TOutput> {
   if (!tool.execute) {
     throw new MastraError({
@@ -40,6 +46,7 @@ export async function runTool<TOutput extends object>(
     workspace: undefined,
     requestContext: undefined,
     experimentalContext: undefined,
+    ...contextOverrides,
   } as never;
 
   const result = await tool.execute(inputData as never, context);
