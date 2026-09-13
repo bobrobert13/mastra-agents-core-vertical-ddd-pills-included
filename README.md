@@ -161,6 +161,25 @@ npm run test:evals     # structural agent/dataset assertions (offline-safe)
 
 Details: `docs/TESTING.md`.
 
+## 🔀 API surface — built-in vs custom
+
+**Built-in (framework, `/api` prefix + auth-protected defaults):** `/api/agents/*`,
+`/api/workflows/*`, `/api/tools/*`, `/api/memory/*`, `/api/observability/*`, and root `/health`
+(compose healthcheck, public by design).
+
+**Custom (this boilerplate, root-level — `/api/*` custom routes throw at boot in Mastra 1.66):**
+
+| Route | Method | Auth | Notes |
+|---|---|---|---|
+| `/hooks/:source` | POST | `requiresAuth:false`; HMAC `x-webhook-signature: sha256=<hex>` | publishes exactly one `webhook.received` on the domain event bus; unset `WEBHOOK_SECRET` ⇒ fail-closed 401 |
+| `/health/version` | GET | `requiresAuth:false` | `{ status, version, env, user }` — `user` reflects Spec 01 auth on the request |
+| `/stream/:agentId` | POST | default (protected once `MASTRA_JWT_SECRET` is set) | AI-SDK UI-message SSE stream (`toAISdkStream`); body `{ messages, memory? }` |
+
+Frontend example with zero glue: `examples/stream-consumer.mjs` (`@mastra/client-js`,
+< 30 LOC). OTLP export: `@mastra/otel-exporter` is the optional companion (+
+`@opentelemetry/exporter-trace-otlp-http|proto|grpc` per protocol). Metrics exist in Mastra
+observability — docs pointer: https://mastra.ai/docs/observability/metrics/overview (out of scope here).
+
 ## 📦 Scripts
 
 | Command | Description |

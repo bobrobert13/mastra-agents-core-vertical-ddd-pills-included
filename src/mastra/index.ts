@@ -1,10 +1,12 @@
 import { Mastra } from '@mastra/core/mastra';
 
+import { validateEnv } from './shared/config/env';
 import { buildInfrastructure } from './shared/config/infrastructure';
 import { detectSchedules } from './shared/config/schedules';
 import { logServiceAvailability } from './shared/config/service-status';
 import { VECTOR_STORE_NAME } from './shared/config/vectors';
 import { buildMcpServer } from './mcp/server';
+import { buildServerSurface } from './routes';
 
 // Import domains
 import { researchAgent, deepResearchWorkflow } from './domains/research';
@@ -14,6 +16,9 @@ import { communicationAgent } from './domains/communication';
 import { indexKnowledgeWorkflow, knowledgeQueryTool } from './domains/knowledge';
 
 // All infrastructure is optional and driven by env vars (see shared/config/infrastructure.ts)
+// Fail-fast ONLY on malformed PRESENT env values (spec 08); absence is always legal.
+validateEnv();
+
 const { storage, vectors, observability, pubsub, auth, mcpClient, services } = buildInfrastructure();
 
 // MCP server (spec 04 §3.3): composition-layer module — the ONLY place allowed to
@@ -30,6 +35,10 @@ const serverConfig: Record<string, unknown> = {
   host: process.env.MASTRA_HOST || '0.0.0.0',
 };
 if (auth) serverConfig.auth = auth;
+// Custom HTTP surface (spec 08): { cors?, middleware, apiRoutes } — Object.assign keeps
+// the server literal free of local identifiers (dev-bundler extraction rule above).
+const surface = buildServerSurface(services); // pushes CORS / Rate limiting / Webhook signing rows
+Object.assign(serverConfig, surface);
 
 export const mastra = new Mastra({
   // fastembed ships platform .node binaries; the bundlers (esp. worker build)

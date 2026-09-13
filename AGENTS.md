@@ -70,6 +70,10 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | MCP client (inbound) | `MCP_SERVERS` (JSON; `${VAR}` interpolation; `agents` routing key) | `○ MCP client` off — set `MCP_SERVERS` to connect external servers; set-but-invalid JSON **fails boot** (spec 04) |
 | MCP server (outbound) | `ENABLE_MCP_SERVER=true` (exact string) | `○ MCP server` disabled — read-only surface; requires Spec 01 auth outside localhost |
 | Guardrails (spec 06) | on by default; LLM detectors (injection/PII) need a provider key | `○ Guardrails …` — `SECURITY_PROCESSORS=off` removes all but the scope guard; TokenLimiter/ResponseCache/workspace jail stay active keyless |
+| Webhook signing | `WEBHOOK_SECRET` | `○ Webhook signing` — `/hooks/*` registered but fail-closed 401 |
+| CORS | `CORS_ORIGIN` (CSV allow-list) | `○ CORS` — permissive `'*'` default; production+unset ⇒ extra WARN (never fails boot) |
+| Rate limiting | `RATE_LIMIT_WINDOW_MS` **and** `RATE_LIMIT_MAX_REQUESTS` | `○ Rate limiting` — limiter off (zero-config unchanged); partial config ⇒ off + banner note |
+| OTLP export | `OTEL_EXPORTER_OTLP_ENDPOINT` (+ dev-installed `@mastra/otel-exporter`) | `○ OTLP export` — storage-only exporters byte-stable |
 
 At startup the server prints a **service availability banner** (✅ active / ○ inactive per service). Keep it in sync when adding optional services.
 
@@ -126,6 +130,8 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 15. **MCP tool responses and tool descriptions are untrusted model input**: `MCP_SERVERS` wires third-party tools into agents without review. Default `requireToolApproval` (`defaultMcpApprovalPolicy`) gates mutating NAMES only (write/edit/delete/remove/drop/create/update incl. camelCase via `toSnake` — `purge_all` dodges it: floor, not ceiling; set `"requireToolApproval": true` wholesale for untrusted servers); `forwardInstructions` stays `false`; the scope guard NEVER inspects tool I/O — Spec 06's `PromptInjectionDetector` is the designated output sanitizer (until then MCP = dev-local trust boundary). The exposed `boilerplate` MCPServer is read-only by construction (ADR-007).
 16. **Guardrail detectors HARD-THROW on guard-model failure** (unlike the fail-open scope guard): `PromptInjectionDetector`/`PIIDetector` require a model and are only mounted with a provider key (`SECURITY_MODEL > guardModel()`). `SECURITY_PROCESSORS=log` is false-positive safety ONLY — an outage still 500s; the only outage-safe switch is `off`. Input processors run ONCE before the loop, so same-run tool output is not rescanned — web-fetch's output-boundary scan (Q3) closes it; other tool sources ride spec 04. `TokenCostControl` throws at REGISTRATION without observability storage → `COST_LIMIT_USD`-only.
 17. **Jail & approvals caveats (spec 06)**: `WORKSPACE_ROOT` resolves against the PROCESS CWD (dev bundles run from `src/mastra/public/` — set an absolute path in prod); the jail is realpath-checked but carries an accepted symlink-TOCTOU residual (ADR-009). Durable/stored agents cannot serialize function-form `requireToolApproval` — boolean only, and `true` there approves EVERY tool call (function form = regular stream/generate only). `ResponseCache` is per-process in-memory (Redis backend = follow-up on spec 02's convention) and its hits REPLAY tool calls without executing — never mount on mutating agents (`disableResponseCache`).
+18. **Custom routes are ROOT-level and global middleware skips public routes**: Mastra 1.66 throws at boot for any `registerApiRoute` path starting with `/api` (`validateCustomRoutePaths`) — the surface lives at `/hooks/:source`, `/health/version`, `/stream/:agentId`. Global `server.middleware` is SKIPPED on `requiresAuth:false` routes (`skipIfFrameworkPublic`) — the webhook carries its own rate limiter + HMAC guard for exactly this reason. `/stream/:agentId` keeps default auth.
+19. **Rate limiter is in-process + XFF-trust-naive**: `docker-compose.prod.yml` runs api `replicas: 3` ⇒ effective cluster ceiling ≈ 3× `RATE_LIMIT_MAX_REQUESTS` with per-replica counters that reset on restart; first-hop `x-forwarded-for` is spoofable without a trusted-proxy hop count in front. Redis-backed global limiting is an unassigned follow-up riding on Spec 02's `REDIS_URL` convention. Webhooks fail closed (401) with no `WEBHOOK_SECRET` — never open.
 
 ## Development Workflow
 
@@ -250,6 +256,9 @@ Mastra Platform (optional): set `MASTRA_PLATFORM_ACCESS_TOKEN`, `MASTRA_PROJECT_
 - **Port 4111 busy** ⇒ `pkill -f "mastra dev"`; the dev user controls server lifecycle.
 - **Worker duplication** ⇒ run exactly ONE scheduler (`MASTRA_WORKERS=scheduler`, compose `replicas: 1`); never scale it — multiple schedulers fire every cron tick twice. Orchestration/backgroundTasks DO scale horizontally (consumer groups).
 - **Split workers not starting** ⇒ `REDIS_URL` missing: distributed PubSub is a hard requirement of the split topology (ADR-005); without it Mastra keeps the in-process bus and workers serve nothing cross-process.
+- **`401 {"error":"invalid webhook signature"}` from `/hooks/*`** ⇒ unset `WEBHOOK_SECRET` (fail-closed design) or the `x-webhook-signature` header isn't HMAC-SHA256 over the **raw bytes** you sent (re-serialized JSON breaks it).
+- **`429 {"error":"rate limit exceeded"}`** ⇒ limiter active; honor `Retry-After`; remember the per-process caveat (gotcha #19).
+- **`OTEL_EXPORTER_OTLP_ENDPOINT` set but no traces arrive** ⇒ read the boot WARN: exporter is the optional `@mastra/otel-exporter` companion (+protocol peer); missing ⇒ storage-only + `○` row.
 
 ## Resources
 

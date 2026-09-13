@@ -76,6 +76,7 @@ services:
       <<: [*mastra-env, *model-env]
       MASTRA_WORKERS: "false"
       MASTRA_WORKER_AUTH_TOKEN: ${MASTRA_WORKER_AUTH_TOKEN:-} # passthrough; consumed by Spec 01 auth
+      CORS_ORIGIN: ${CORS_ORIGIN:-} # spec 08: unset keeps the permissive default + boot WARN (api-only: workers serve no HTTP)
       ENABLE_TRACING: ${ENABLE_TRACING:-true}
     ports:
       - "4111:4111"

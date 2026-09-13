@@ -38,4 +38,12 @@ npm run test:integration
 npm run test:evals         # structural today; skipIf-guarded when live calls are added
 ```
 
+### Opt-in HTTP tier (spec 08)
+`tests/integration/http-surface.test.ts` runs ONLY with `RUN_HTTP_TESTS=1`:
+`RUN_HTTP_TESTS=1 npm run test:integration`. It needs no network (in-process Hono harness),
+no built artifact, and no port; Scenario 4 additionally needs a live provider key (nested
+skipIf). CI vehicle (propose at merge): a weekly scheduled job next to `auto-update`
+running `RUN_HTTP_TESTS=1 npm run test:integration` — or piggyback Spec 07's live-tier job
+if that lands first (cross-reference in the PR). Never leave the gate variable set by nobody.
+
 <!-- MANUAL: -->
