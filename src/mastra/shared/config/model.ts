@@ -16,7 +16,8 @@
  *   ollama/llama3.1
  */
 
-export type ModelKey = 'research' | 'tasks' | 'files' | 'comms' | 'observational-memory';
+export type ModelKey =
+  'research' | 'tasks' | 'files' | 'comms' | 'observational-memory' | 'scope-guard';
 
 /** Last-resort default so the app constructs agents without any env config. */
 export const DEFAULT_MODEL = 'openai/gpt-4o-mini';
@@ -48,3 +49,6 @@ export const agentModel = {
 
 /** Model for Memory's observational/summarizer workloads. */
 export const memoryModel = () => resolveModel('observational-memory');
+
+/** Model for the scope-guard classifier (keep cheap: one extra call per turn). */
+export const guardModel = (): string => env('SCOPE_GUARD_MODEL') ?? env('MODEL') ?? DEFAULT_MODEL;

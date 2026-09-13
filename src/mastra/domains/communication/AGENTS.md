@@ -10,7 +10,7 @@ Smallest vertical slice: agent + one structured-interaction tool. Reference impl
 
 | File | Description |
 |------|-------------|
-| `agent.ts` | `communication-agent` / "Communication Agent"; model via `agentModel.comms()` — env-driven |
+| `agent.ts` | `communication-agent` / "Communication Agent"; model via `agentModel.comms()` — env-driven; exports `communicationScope` + `communicationScopeGuard` (hard scope enforcement) |
 | `index.ts` | Barrel export |
 
 ## Subdirectories

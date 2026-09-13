@@ -10,7 +10,7 @@ Web-research vertical slice: an agent that searches the web, fetches pages, summ
 
 | File | Description |
 |------|-------------|
-| `agent.ts` | `research-agent` / "Research Agent"; model via `agentModel.research()` — env-driven, provider-agnostic; Memory + observationalMemory via `memoryModel()` |
+| `agent.ts` | `research-agent` / "Research Agent"; model via `agentModel.research()` — env-driven, provider-agnostic; Memory + observationalMemory via `memoryModel()`; exports `researchScope` + `researchScopeGuard` (hard scope enforcement, wired in `inputProcessors`) |
 | `events.ts` | `research.started` / `research.completed` event contracts (published on the shared bus) |
 | `types.ts` | Domain types shared by tools/workflows |
 | `index.ts` | Barrel — the only import surface for other code |
@@ -20,7 +20,7 @@ Web-research vertical slice: an agent that searches the web, fetches pages, summ
 | Directory | Purpose |
 |-----------|---------|
 | `tools/` | `web-search.ts` (custom DuckDuckGo HTML scraping — replaces built-in `webSearchTool`, which only supports OpenAI/Anthropic/Google/xAI), `web-fetch.ts` (URL content extraction), `summarize.ts` (LLM summarization with maxLength truncation), `index.ts` barrel |
-| `workflows/` | `deep-research.ts`: `search-sources` → `fetch-content` → `summarize-content` |
+| `workflows/` | `deep-research.ts`: `search-sources` → `fetch-content` → `summarize-content` → prepare → summarize; **registered** in `src/mastra/index.ts` `workflows` map (visible at `GET /api/workflows`) |
 | `scorers/` | `relevance-scorer.ts`: heuristic score (0-1) + reason; used by `tests/evals/research.eval.test.ts` |
 
 ## For AI Agents

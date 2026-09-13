@@ -1,9 +1,10 @@
 import { Mastra } from '@mastra/core/mastra';
 
-import { buildInfrastructure, logServiceAvailability } from './shared/config/infrastructure';
+import { buildInfrastructure } from './shared/config/infrastructure';
+import { logServiceAvailability } from './shared/config/service-status';
 
 // Import domains
-import { researchAgent } from './domains/research';
+import { researchAgent, deepResearchWorkflow } from './domains/research';
 import { taskManagementAgent } from './domains/task-management';
 import { fileOperationsAgent } from './domains/file-operations';
 import { communicationAgent } from './domains/communication';
@@ -17,6 +18,9 @@ export const mastra = new Mastra({
     tasks: taskManagementAgent,
     files: fileOperationsAgent,
     comms: communicationAgent,
+  },
+  workflows: {
+    'deep-research': deepResearchWorkflow,
   },
   storage,
   ...(observability && { observability }),

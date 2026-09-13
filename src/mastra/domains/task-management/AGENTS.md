@@ -10,7 +10,7 @@ Task and schedule vertical slice: CRUD-ish agent over a Task entity with lifecyc
 
 | File | Description |
 |------|-------------|
-| `agent.ts` | `task-management-agent` / "Task Management Agent"; model via `agentModel.tasks()` — env-driven; Memory + observationalMemory via `memoryModel()` |
+| `agent.ts` | `task-management-agent` / "Task Management Agent"; model via `agentModel.tasks()` — env-driven; Memory + observationalMemory via `memoryModel()`; exports `taskManagementScope` + `taskManagementScopeGuard` (hard scope enforcement) |
 | `entities/task.ts` | `Task` interface; `TaskStatus` = pending \| in-progress \| completed; `TaskPriority` = low \| medium \| high; `TaskSchedule` |
 | `events.ts` | `task.created` / `task.updated` / `task.completed` / `task.scheduled` contracts |
 | `index.ts` | Barrel export |

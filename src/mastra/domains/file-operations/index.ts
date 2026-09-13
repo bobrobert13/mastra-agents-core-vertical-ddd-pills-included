@@ -1,2 +1,2 @@
-export { fileOperationsAgent } from './agent';
+export { fileOperationsAgent, fileOperationsScope, fileOperationsScopeGuard } from './agent';
 export { readFileTool, writeFileTool, editFileTool } from './tools';

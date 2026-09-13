@@ -10,7 +10,7 @@ Local-filesystem vertical slice: an agent exposing guarded read/write/edit tools
 
 | File | Description |
 |------|-------------|
-| `agent.ts` | `file-operations-agent` / "File Operations Agent"; model via `agentModel.files()` — env-driven |
+| `agent.ts` | `file-operations-agent` / "File Operations Agent"; model via `agentModel.files()` — env-driven; exports `fileOperationsScope` + `fileOperationsScopeGuard` (hard scope enforcement — this is the agent from the off-topic incident, root AGENTS.md gotcha #7) |
 | `index.ts` | Barrel export |
 
 ## Subdirectories
