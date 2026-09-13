@@ -16,7 +16,12 @@ export const createTaskTool = createTool({
     status: z.string(),
     createdAt: z.string(),
   }),
-  execute: async ({ title, description: _description, priority: _priority = 'medium', dueDate: _dueDate }) => {
+  execute: async ({
+    title,
+    description: _description,
+    priority: _priority = 'medium',
+    dueDate: _dueDate,
+  }) => {
     const taskId = `task_${Date.now()}_${Math.random().toString(36).substring(7)}`;
 
     return {

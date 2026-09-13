@@ -34,15 +34,21 @@ export class LibSQLFeedbackCompatStore extends ObservabilityLibSQL {
     return { feedback: [] };
   }
 
-  async getFeedbackAggregate(_args: GetFeedbackAggregateArgs): Promise<GetFeedbackAggregateResponse> {
+  async getFeedbackAggregate(
+    _args: GetFeedbackAggregateArgs
+  ): Promise<GetFeedbackAggregateResponse> {
     return { value: null };
   }
 
-  async getFeedbackBreakdown(_args: GetFeedbackBreakdownArgs): Promise<GetFeedbackBreakdownResponse> {
+  async getFeedbackBreakdown(
+    _args: GetFeedbackBreakdownArgs
+  ): Promise<GetFeedbackBreakdownResponse> {
     return { groups: [] };
   }
 
-  async getFeedbackTimeSeries(_args: GetFeedbackTimeSeriesArgs): Promise<GetFeedbackTimeSeriesResponse> {
+  async getFeedbackTimeSeries(
+    _args: GetFeedbackTimeSeriesArgs
+  ): Promise<GetFeedbackTimeSeriesResponse> {
     return { series: [] };
   }
 
@@ -52,9 +58,7 @@ export class LibSQLFeedbackCompatStore extends ObservabilityLibSQL {
     return { series: [] };
   }
 
-  async updateFeedbackReviewStatus(
-    _args: UpdateFeedbackReviewStatusArgs
-  ): Promise<FeedbackRecord> {
+  async updateFeedbackReviewStatus(_args: UpdateFeedbackReviewStatusArgs): Promise<FeedbackRecord> {
     throw new MastraError({
       id: 'FEEDBACK_WRITE_UNSUPPORTED_ON_LIBSQL',
       domain: ErrorDomain.MASTRA_OBSERVABILITY,

@@ -36,7 +36,4 @@ export interface TaskScheduledEvent {
 }
 
 export type TaskEvent =
-  | TaskCreatedEvent
-  | TaskUpdatedEvent
-  | TaskCompletedEvent
-  | TaskScheduledEvent;
+  TaskCreatedEvent | TaskUpdatedEvent | TaskCompletedEvent | TaskScheduledEvent;

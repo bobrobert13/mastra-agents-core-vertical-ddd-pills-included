@@ -53,11 +53,7 @@ export async function runTool<TOutput extends object>(
     });
   }
 
-  if (
-    typeof result === 'object' &&
-    'error' in result &&
-    Object.keys(result).length === 1
-  ) {
+  if (typeof result === 'object' && 'error' in result && Object.keys(result).length === 1) {
     throw new MastraError({
       id: 'TOOL_VALIDATION_ERROR',
       domain: ErrorDomain.TOOL,

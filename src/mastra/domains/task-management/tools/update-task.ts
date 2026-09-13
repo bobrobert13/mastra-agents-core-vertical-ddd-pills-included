@@ -16,7 +16,13 @@ export const updateTaskTool = createTool({
     updated: z.boolean(),
     message: z.string(),
   }),
-  execute: async ({ taskId, title: _title, description: _description, status: _status, priority: _priority }) => {
+  execute: async ({
+    taskId,
+    title: _title,
+    description: _description,
+    status: _status,
+    priority: _priority,
+  }) => {
     // In a real implementation, this would update in database
     return {
       taskId,
