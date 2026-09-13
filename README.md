@@ -114,6 +114,34 @@ Cross-domain communication is event-driven (ADR-003, superseded by [ADR-005](doc
 | Model providers | any `*_API_KEY` | app boots; generation fails clearly |
 | Model selection | `MODEL_<AGENT>` / `MODEL` / `DEFAULT_MODEL` | built-in default |
 
+## 🔌 MCP: consume & expose (ADR-007)
+
+**Inbound** — set `MCP_SERVERS` (JSON, one entry per server, `${VAR}` interpolation for
+secrets). `"agents": ["research"]` routes that server's tools (namespaced `server_tool`) into
+the matching agent. Anything mutating in its name requires human approval by default; a server
+down at boot degrades to a warn line, never a crash. Malformed JSON fails the boot with an
+actionable `[MCP] Invalid MCP_SERVERS …` message. Example:
+
+```json
+{"wikipedia":{"command":"npx","args":["-y","wikipedia-mcp"],"inheritDefaultEnv":false,"agents":["research"]},
+ "weather":{"url":"https://weather.example.com/mcp","requestInit":{"headers":{"Authorization":"Bearer ${WEATHER_API_KEY}"}},"allowedHosts":["weather.example.com"],"requireToolApproval":true}}
+```
+
+**Outbound** — `ENABLE_MCP_SERVER=true` registers the **read-only** server at
+`/api/mcp/boilerplate/mcp` (protected by `server.auth` when configured; required outside
+localhost): research + comms agents as `ask_*` tools plus `file-read` (⚠ path exposure —
+reads any file under `WORKSPACE_ROOT`). Workflow exposure is excluded in v1.
+
+**Claude Desktop (stdio)** — `npm run mcp:stdio` (esbuild bundle → `.mastra/mcp-stdio.mjs`;
+plain Node cannot run the TS source's extensionless imports):
+
+```json
+{"mcpServers":{"mastra-boilerplate":{"command":"npm","args":["run","mcp:stdio"],"cwd":"/path/to/project"}}}
+```
+
+Until Spec 06's output detector ships, treat MCP tool results/descriptions as untrusted
+model input — dev-local trust boundary (root AGENTS.md gotcha #15).
+
 ## 🧪 Testing
 
 ```bash

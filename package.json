@@ -9,6 +9,8 @@
     "build:worker": "mastra worker build --output-dir .mastra/worker",
     "build:all": "npm run build && npm run build:worker",
     "start": "mastra start",
+    "mcp:stdio:build": "esbuild src/mastra/mcp/stdio.ts --bundle --packages=external --platform=node --format=esm --target=es2022 --outfile=.mastra/mcp-stdio.mjs",
+    "mcp:stdio": "npm run mcp:stdio:build && node .mastra/mcp-stdio.mjs",
     "lint": "eslint src --max-warnings=0",
     "lint:fix": "eslint src --fix",
     "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\"",

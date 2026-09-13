@@ -4,6 +4,7 @@ import { buildInfrastructure } from './shared/config/infrastructure';
 import { detectSchedules } from './shared/config/schedules';
 import { logServiceAvailability } from './shared/config/service-status';
 import { VECTOR_STORE_NAME } from './shared/config/vectors';
+import { buildMcpServer } from './mcp/server';
 
 // Import domains
 import { researchAgent, deepResearchWorkflow } from './domains/research';
@@ -13,7 +14,11 @@ import { communicationAgent } from './domains/communication';
 import { indexKnowledgeWorkflow, knowledgeQueryTool } from './domains/knowledge';
 
 // All infrastructure is optional and driven by env vars (see shared/config/infrastructure.ts)
-const { storage, vectors, observability, pubsub, auth, services } = buildInfrastructure();
+const { storage, vectors, observability, pubsub, auth, mcpClient, services } = buildInfrastructure();
+
+// MCP server (spec 04 §3.3): composition-layer module — the ONLY place allowed to
+// import domain barrels for MCPServer assembly (ADR-007 carve-out); off unless ENABLE_MCP_SERVER=true.
+const { mcpServer } = await buildMcpServer(services);
 
 // NOTE: the `server` object literal must contain NO local identifiers —
 // `mastra dev` statically extracts this literal into a standalone
@@ -50,6 +55,14 @@ export const mastra = new Mastra({
   storage,
   ...(observability && { observability }),
   ...(pubsub && { pubsub }),
+  // proxies gate on mcpClient, NOT on mcpServer: shipped defaults (ENABLE_MCP_SERVER unset)
+  // + MCP_SERVERS set must still surface external servers in Studio (spec 04 §3.3):
+  ...((mcpServer || mcpClient) && {
+    mcpServers: {
+      ...(mcpServer && { boilerplate: mcpServer }),
+      ...(mcpClient?.toMCPServerProxies() ?? {}),
+    },
+  }),
   server: serverConfig,
 });
 

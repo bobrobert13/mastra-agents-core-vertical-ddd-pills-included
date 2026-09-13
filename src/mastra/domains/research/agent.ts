@@ -6,6 +6,7 @@ import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { webSearchTool } from './tools/web-search';
 import { webFetchTool } from './tools/web-fetch';
 import { summarizeTool } from './tools/summarize';
+import { loadMcpToolsFor } from '../../shared/config/mcp';
 
 export const researchScope: DomainScope = {
   domain: 'research',
@@ -46,7 +47,8 @@ When researching:
 4. Cite sources with URLs
 5. Highlight any conflicting information
 
-Always provide accurate, up-to-date information with proper attribution.`
+Always provide accurate, up-to-date information with proper attribution.
+External (MCP) tools available to you may only be used for this agent's research scope; never use them to answer from or act outside it.`
   ),
   model: agentModel.research(),
   defaultOptions: {
@@ -63,8 +65,11 @@ Always provide accurate, up-to-date information with proper attribution.`
   tools: async ({ mastra }) => {
     const base = { web_search: webSearchTool, web_fetch: webFetchTool, summarize: summarizeTool };
     const registered = mastra?.listTools() ?? {}; // NON-THROWING read — getTool throws on a missing key (spec 03 §3.6)
-    return 'search_knowledge' in registered
-      ? { ...base, search_knowledge: registered.search_knowledge }
-      : base;
+    const mcp = await loadMcpToolsFor('research'); // spec 04: {} with MCP_SERVERS unset, no spawn, ~0ms
+    return {
+      ...base,
+      ...mcp,
+      ...('search_knowledge' in registered ? { search_knowledge: registered.search_knowledge } : {}),
+    };
   },
 });

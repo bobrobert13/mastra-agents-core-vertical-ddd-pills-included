@@ -67,6 +67,8 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
 | Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
 | Scope guard | on by default (`SCOPE_GUARD_MODEL` optional) | `SCOPE_GUARD=off` disables; inert (fail-open) with no provider key |
+| MCP client (inbound) | `MCP_SERVERS` (JSON; `${VAR}` interpolation; `agents` routing key) | `○ MCP client` off — set `MCP_SERVERS` to connect external servers; set-but-invalid JSON **fails boot** (spec 04) |
+| MCP server (outbound) | `ENABLE_MCP_SERVER=true` (exact string) | `○ MCP server` disabled — read-only surface; requires Spec 01 auth outside localhost |
 
 At startup the server prints a **service availability banner** (✅ active / ○ inactive per service). Keep it in sync when adding optional services.
 
@@ -120,6 +122,7 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 12. **Sticky vector dimensions** — an index serves one embedder dimension forever. Memory's derived recall index is keyed by the PROBED DIMENSION (`memory_messages[_<dim>]`, indexName unset): cross-dim `EMBEDDING_MODEL` switch silently cold-resets recall (orphan old index — delete manually); same-dim switch (e.g. `text-embedding-3-small` → `ada-002`, both 1536d) silently MIXES vectors with no error. Treat embedder changes as re-index events; the knowledge workflow instead fail-fasts with `VectorDimensionMismatchError` (ADR-006).
 13. **fastembed first run downloads a model** — a multi-hundred-MB ONNX tarball from storage.googleapis.com into `~/.cache/mastra/fastembed-models`. Offline + cold cache ⇒ ONE canonical warn, recall OFF, process survives. Pre-warm CI with `warmup()` from `@mastra/fastembed` + cache-probe `skipIf` (pattern: `tests/integration/semantic-recall.test.ts`). Its native binary dep `@anush008/tokenizers` MUST stay in `bundler.externals` (set in `src/mastra/index.ts`) or `mastra build`/`mastra worker build` die on the `.node` analysis.
 14. **Recall works keyless; ANSWERING doesn't** — zero-key recall stores/recalls vectors fine (local E5), but `generate()` still 401s without a provider API key. Two different degradations with different banner lines — do not conflate them in tests or docs.
+15. **MCP tool responses and tool descriptions are untrusted model input**: `MCP_SERVERS` wires third-party tools into agents without review. Default `requireToolApproval` (`defaultMcpApprovalPolicy`) gates mutating NAMES only (write/edit/delete/remove/drop/create/update incl. camelCase via `toSnake` — `purge_all` dodges it: floor, not ceiling; set `"requireToolApproval": true` wholesale for untrusted servers); `forwardInstructions` stays `false`; the scope guard NEVER inspects tool I/O — Spec 06's `PromptInjectionDetector` is the designated output sanitizer (until then MCP = dev-local trust boundary). The exposed `boilerplate` MCPServer is read-only by construction (ADR-007).
 
 ## Development Workflow
 

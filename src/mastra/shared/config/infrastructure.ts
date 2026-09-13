@@ -5,6 +5,8 @@ import { buildObservability } from './observability';
 import { buildPubsub } from './pubsub';
 import { buildAuth, type AuthConfig } from './auth';
 import { buildVectors, type VectorResolution } from './vectors';
+import type { MCPClient } from '@mastra/mcp';
+import { buildMcpClient } from './mcp';
 import { attachEventBusBridge } from '../events';
 import { detectModelProviders, detectScopeGuard, hasAnyProviderKey } from './providers';
 import type { ServiceStatus, ServiceRegistry } from './service-status';
@@ -18,6 +20,7 @@ export interface Infrastructure {
   pubsub?: PubSub;
   auth?: AuthConfig;
   vectors: VectorResolution;
+  mcpClient?: MCPClient;
   services: ServiceStatus[];
 }
 
@@ -36,8 +39,9 @@ export function buildInfrastructure(): Infrastructure {
   const pubsub = buildPubsub(services);
   attachEventBusBridge(pubsub);
   const auth = buildAuth(services);
+  const { client: mcpClient } = buildMcpClient(services); // throws on set-but-invalid MCP_SERVERS (fail-fast, spec 04 Sc.2)
   detectModelProviders(services);
   detectScopeGuard(services, hasAnyProviderKey());
 
-  return { storage, vectors, observability, pubsub, auth, services };
+  return { storage, vectors, observability, pubsub, auth, mcpClient, services };
 }
