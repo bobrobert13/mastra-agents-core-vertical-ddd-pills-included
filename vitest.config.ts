@@ -9,8 +9,19 @@ export default defineConfig({
     exclude: ['node_modules', 'dist', 'workspace'],
     coverage: {
       provider: 'v8',
-      reporter: ['text', 'json', 'html'],
-      exclude: ['node_modules/', 'tests/', '**/*.d.ts'],
+      // CALIBRATION FIX (spec 07 §3.5): without `include` the sweep also counts
+      // the bundled `.mastra/` build artifacts (~255k statements → "All files
+      // 0.36%"). Gate scope is src/ only.
+      include: ['src/**/*.ts'],
+      exclude: ['**/*.d.ts', 'src/**/index.ts'],
+      // json-summary so the gate delta is machine-readable (evals-live.yml)
+      reporter: ['text', 'json-summary', 'lcov'],
+      // Floors calibrated to MEASURED src/ coverage minus margin — ratchet
+      // policy (spec 07 risk 3): raise when measured ≥ floor + 2pp; lower
+      // only via an explicit reviewed config change. NEVER merge a gate
+      // that is red on its own merge commit. See .artifacts/integration-
+      // brief-07.md for the final measured calibration on this tree.
+      thresholds: { statements: 74, lines: 74, branches: 70, functions: 55 },
     },
     testTimeout: 30000,
   },

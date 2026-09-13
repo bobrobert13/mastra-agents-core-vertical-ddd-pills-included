@@ -17,6 +17,7 @@ An Architecture Decision Record (ADR) captures a single architectural decision m
 - [ADR-007: MCP as the Single External-Integration Boundary](./007-mcp-as-integration-boundary.md) — inbound `MCPClient` singleton from `MCP_SERVERS` JSON + approval floor; opt-in read-only outbound `MCPServer` (composition-layer carve-out); stdio esbuild artifact
 - [ADR-008: Application Data in Mastra Storage Databases](./008-application-data-in-mastra-storage.md) — custom tables (`app_tasks`), domain-owned repositories, `AppDatabase` factory
 - [ADR-009: Deterministic Security Processors as the Default Pipeline](./009-guardrails-security-processor-pipeline.md) — guardrails stack (inert-without-key rule) + workspace jail + HITL approvals/suspensions
+- [ADR-010: Eval Datasets & Experiments Live in Mastra Storage](./010-eval-datasets-experiments-in-storage.md) — `mastra.datasets` storage domains at runtime, git JSON stays the reviewed seed source, 90d retention on experiments+scores (datasets deliberately excluded)
 
 ## Template
 

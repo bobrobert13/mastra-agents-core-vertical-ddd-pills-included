@@ -13,7 +13,7 @@ Three-tier test pyramid: deterministic unit tests, cross-domain integration test
 | `smoke/` | Zero-config boot of the real composition root (`src/mastra/index.ts`): instance constructs with no env vars, 4 agents + workflow registered. Never add model calls here. |
 | `unit/` | Fast, no network. `unit/domains/<domain>/` mirrors source layout; `unit/shared/event-bus.test.ts` |
 | `integration/` | `cross-domain.test.ts` (in-process event flow), `pubsub-redis.test.ts` (skipIf `!REDIS_URL`), `task-persistence-schedules.test.ts` (pg leg gated + offline schedules claim probe), `semantic-recall`/`knowledge-rag`/`recall-degrade`/`pg-vectors` (spec 03 tiers), `mcp-stdio.test.ts` (real stdio subprocess via echo helper + `process.execPath`, no npx/network: namespaced discovery, approval predicate, **singleton spawns EXACTLY ONE child**, disconnect; `skipIf` without `@mastra/mcp`) |
-| `evals/` | `research.eval.test.ts`, `task-management.eval.test.ts` — currently **structural** (identity/model/dataset contracts, offline-safe); live LLM evals are an upgrade path guarded by `describe.skipIf` |
+| `evals/` | **Two-tier (spec 07)**: `*.eval.test.ts` = native-dataset schema/contract suites (seed → `:memory:`, JSON↔storage parity, idempotency, schema rejection); `gates/*.gates.test.ts` = **keyless-blocking** Tier A — code-based scorers over `fixtures/*-recorded.json` + Δ≤0.02 vs `baseline/eval-baseline.json`, `EVAL GATE <verdict>` throw ⇒ red; live judges = `describe.skipIf(!hasProviderKey())`; `experiments/live-experiments.test.ts` = Tier B runner (needs `EVALS_LIVE_MODE=1` + phase env; inert on PR jobs) |
 
 ## Key Files
 
@@ -35,7 +35,9 @@ Three-tier test pyramid: deterministic unit tests, cross-domain integration test
 npm run test:smoke         # zero-config boot (no env, no network)
 npm run test:unit          # always green offline
 npm run test:integration
-npm run test:evals         # structural today; skipIf-guarded when live calls are added
+npm run test:evals         # two-tier (spec 07): keyless Tier A gates + skipIf live
+npm run test:coverage:gate # all four tiers + threshold gate (vitest.config.ts)
+npm run seed:eval-datasets # JSON → native datasets (EVAL_STORAGE_URL, default file:./eval-ci.db)
 ```
 
 ### Opt-in HTTP tier (spec 08)

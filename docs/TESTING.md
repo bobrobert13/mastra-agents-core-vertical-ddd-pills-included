@@ -156,7 +156,7 @@ const result = await runEvals({
   scorers: [
     {
       scorer: createAnswerRelevancyScorer(),
-      threshold: { gte: 0.7 }
+      threshold: 0.7, // a number = minimum; { min?, max? } for bounds
     }
   ]
 });
@@ -294,7 +294,7 @@ gates: [
 
 // Scorers: Quality metrics with thresholds
 scorers: [
-  { scorer: relevancyScorer, threshold: { gte: 0.8 } }
+  { scorer: relevancyScorer, threshold: { min: 0.8 } }
 ]
 ```
 

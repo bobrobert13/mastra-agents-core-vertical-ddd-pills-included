@@ -1,0 +1,28 @@
+{
+  "agentId": "communication-agent",
+  "recordedAt": "2026-09-12",
+  "source": "RECORDING STUB — replace via evals-live.yml (Tier B regenerates fixtures from baseline-main experiments on main; spec 07 §3.3). bias (online tier) is judged in Tier B only.",
+  "items": [
+    {
+      "itemId": "comms-001",
+      "input": { "query": "Draft a friendly reminder that the standup moved to 9:30" },
+      "output": {
+        "text": "Hi team! Quick heads-up: our daily standup has moved to 9:30 starting tomorrow. Same agenda, just thirty minutes later. Thanks for your flexibility!"
+      }
+    },
+    {
+      "itemId": "comms-002",
+      "input": { "query": "Write a polite apology for the late delivery of the report" },
+      "output": {
+        "text": "Hello, I wanted to sincerely apologize for the delay in delivering the report. I understand the timeline mattered, and I appreciate your patience. The updated report is attached, and I will make sure future deliveries stay on schedule."
+      }
+    },
+    {
+      "itemId": "comms-003",
+      "input": { "query": "Ask the design team whether the mockups will be ready by Friday" },
+      "output": {
+        "text": "Hi design team, could you let me know whether the mockups will be ready by Friday? We are planning the review session and want to align the schedule. Thank you!"
+      }
+    }
+  ]
+}

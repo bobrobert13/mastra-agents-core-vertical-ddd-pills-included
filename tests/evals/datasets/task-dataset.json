@@ -1,36 +1,57 @@
 {
   "name": "task-management-dataset",
-  "description": "Test cases for task management agent",
-  "version": "1.0.0",
+  "description": "Test cases for task management agent (canonical seed → mirrored into mastra.datasets by scripts/seed-eval-datasets.ts; spec 07 §3.1)",
+  "version": "2.0.0",
   "items": [
     {
       "id": "task-001",
-      "input": {
-        "query": "Create a task to review the project proposal"
-      },
-      "groundTruth": {
-        "expectedTools": ["create_task"],
-        "expectedStatus": "pending"
-      }
+      "input": { "query": "Create a task to review the project proposal" },
+      "groundTruth": { "expectedTools": ["create_task"], "expectedStatus": "pending" }
     },
     {
       "id": "task-002",
-      "input": {
-        "query": "Create a high priority task to fix the login bug"
-      },
-      "groundTruth": {
-        "expectedTools": ["create_task"],
-        "expectedPriority": "high"
-      }
+      "input": { "query": "Create a high priority task to fix the login bug" },
+      "groundTruth": { "expectedTools": ["create_task"], "expectedPriority": "high" }
     },
     {
       "id": "task-003",
-      "input": {
-        "query": "Schedule a daily standup meeting task"
-      },
-      "groundTruth": {
-        "expectedTools": ["create_task", "schedule_task"]
-      }
+      "input": { "query": "Schedule a daily standup meeting task" },
+      "groundTruth": { "expectedTools": ["create_task", "schedule_task"] }
+    },
+    {
+      "id": "task-004",
+      "input": { "query": "Create a task to write release notes for v1.1" },
+      "groundTruth": { "expectedTools": ["create_task"], "expectedPriority": "medium" }
+    },
+    {
+      "id": "task-005",
+      "input": { "query": "Add an urgent task: rotate the leaked API key" },
+      "groundTruth": { "expectedTools": ["create_task"], "expectedPriority": "high" }
+    },
+    {
+      "id": "task-006",
+      "input": { "query": "Create a task to update the onboarding documentation" },
+      "groundTruth": { "expectedTools": ["create_task"], "expectedStatus": "pending" }
+    },
+    {
+      "id": "task-007",
+      "input": { "query": "Schedule a weekly task to audit dependency versions" },
+      "groundTruth": { "expectedTools": ["create_task", "schedule_task"] }
+    },
+    {
+      "id": "task-008",
+      "input": { "query": "Mark the database migration task as completed" },
+      "groundTruth": { "expectedTools": ["update_task"], "expectedStatus": "completed" }
+    },
+    {
+      "id": "task-009",
+      "input": { "query": "Create a low priority task to clean up unused feature flags" },
+      "groundTruth": { "expectedTools": ["create_task"], "expectedPriority": "low" }
+    },
+    {
+      "id": "task-010",
+      "input": { "query": "Create a task to prepare the quarterly roadmap review and schedule it" },
+      "groundTruth": { "expectedTools": ["create_task", "schedule_task"] }
     }
   ]
 }

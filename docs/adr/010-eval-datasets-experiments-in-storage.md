@@ -1,0 +1,21 @@
+# ADR-010: Eval Datasets & Experiments Live in Mastra Storage (Git JSON Stays the Seed Source)
+
+## Status
+Accepted
+
+## Context
+Spec 07 upgrades the eval tier from two structural test files to production evals: versioned datasets, comparable experiments, built-in scorers registered on all four agents, and a two-tier CI gate (keyless-blocking Tier A + LLM-judge Tier B). `@mastra/core@1.66.0` ships the `mastra.datasets` service (`DatasetsManager`/`Dataset`/`startExperiment`/`compareExperiments`), and the LibSQL adapter we already default to (`@mastra/libsql@1.22.5`) provides the required storage domains (`DatasetsLibSQL`, `ExperimentsLibSQL`, `ScorerDefinitionsLibSQL`) — the same domains Postgres mirrors. Studio's Datasets/Experiments/Compare UI reads exactly this storage. There is **no filesystem-import API** in core: everything (Studio bulk import, HTTP, client-js, `mastra api`) funnels into the storage service.
+
+The open design question: datasets are *data*, and this repo keeps its quality bar in git (`tests/evals/datasets/*.json`, reviewable as PR diffs). Do eval datasets live in git, in storage, or both — and who owns retention of the experiment rows storage accumulates?
+
+## Decision
+1. **Datasets and experiments are first-class storage-domain records.** Runtime eval reads/writes go through `mastra.datasets` against a storage adapter exposing the datasets domain (LibSQL default, Postgres for production). No bespoke JSON loader in the eval path.
+2. **Git JSON stays the canonical, reviewed seed source.** `tests/evals/datasets/*.json` is the source of truth; `scripts/seed-eval-datasets.ts` mirrors it into storage idempotently (items carry a stable `externalId` mirroring the JSON `id`; re-seed skips existing ids). Storage is the runtime mirror, not the authoring surface. Growing a dataset = a normal reviewed PR that edits JSON; the seed syncs.
+3. **Eval runs never touch app storage.** CI/live tiers seed into a throwaway location (`EVAL_STORAGE_URL`, default `file:./eval-ci.db`; contract tests use `:memory:`) so dataset version churn can't pollute `mastra.db`/`DATABASE_URL`.
+4. **Retention governs experiments + scores; datasets are delete-managed.** Store configs declare `retention: { experiments: { experiments: { maxAge: '90d' } }, scores: { scorers: { maxAge: '90d' } } }` (results cascade with their experiment; running experiments are never pruned). Datasets are user-authored config and NOT retention-eligible (verified storage docs) — their lifecycle is explicit: `mastra.datasets.delete`, `purgeItem` for erasure (SCD-2 tombstones keep history otherwise), and size bounded by the git-seed pattern.
+5. **Studio is the eval UI.** Because datasets/experiments/scorers are storage/registry records, the same data is visible in Studio (Datasets → Items/Experiments/Compare; scorer picker lists the `Mastra` registry keys) with zero extra surface. `mastra dev` against a seeded `EVAL_STORAGE_URL` is the operator review loop; `npx mastra api dataset|experiment` is the CLI path.
+
+## Consequences
+- **Positive:** versioned datasets (SCD-2 per-item history + experiment version pinning), side-by-side `compareExperiments` reports, and model-swap evidence (Spec 07 KR2) come free from core — no homegrown eval DB. Keyless Tier A gates stay byte-stable because they score frozen recorded fixtures against a committed baseline, not live storage. Same seed script serves CI, local dev, and Postgres production.
+- **Negative / accepted:** a second copy of dataset content exists (storage mirror) — drift is possible, so the eval tier asserts JSON↔storage parity (counts + externalId sets) rather than trusting sync order; seeding requires storage domains absent from non-LibSQL/PG adapters (fine: those are the only supported backends here); experiment rows accumulate between nightly `prune()` calls until retention ages them; the `externalId` identity trick means purge semantics must account for ids surviving item erasure (verified docs warning — never store sensitive data there).
+- **Neutral:** ADR-008 already established "domain data beside Mastra's own tables"; this extends that posture to eval records without touching the app DB (throwaway URLs keep the boundaries clean).

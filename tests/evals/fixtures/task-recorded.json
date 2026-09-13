@@ -1,0 +1,110 @@
+{
+  "agentId": "task-management-agent",
+  "recordedAt": "2026-09-12",
+  "source": "RECORDING STUB — replace via evals-live.yml (Tier B regenerates fixtures from baseline-main experiments on main; spec 07 §3.3).",
+  "items": [
+    {
+      "itemId": "task-001",
+      "input": { "query": "Create a task to review the project proposal" },
+      "output": {
+        "text": "Created the task \"Review the project proposal\" with status pending. You can track it in the task list.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Review the project proposal", "priority": "medium" }, "result": { "id": "task-rec-001", "status": "pending" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-002",
+      "input": { "query": "Create a high priority task to fix the login bug" },
+      "output": {
+        "text": "Created the high priority task \"Fix the login bug\" — status pending. It now appears at the top of your task list.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Fix the login bug", "priority": "high" }, "result": { "id": "task-rec-002", "status": "pending" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-003",
+      "input": { "query": "Schedule a daily standup meeting task" },
+      "output": {
+        "text": "Created the task \"Daily standup meeting\" and scheduled it to run every day at 09:00.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Daily standup meeting" }, "result": { "id": "task-rec-003", "status": "pending" }, "state": "result" },
+          { "toolName": "schedule_task", "args": { "taskId": "task-rec-003", "cron": "0 9 * * *" }, "result": { "scheduled": true }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-004",
+      "input": { "query": "Create a task to write release notes for v1.1" },
+      "output": {
+        "text": "Created the medium priority task \"Write release notes for v1.1\" with status pending.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Write release notes for v1.1", "priority": "medium" }, "result": { "id": "task-rec-004", "status": "pending" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-005",
+      "input": { "query": "Add an urgent task: rotate the leaked API key" },
+      "output": {
+        "text": "Created the high priority task \"Rotate the leaked API key\" — treat it as urgent; status pending.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Rotate the leaked API key", "priority": "high" }, "result": { "id": "task-rec-005", "status": "pending" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-006",
+      "input": { "query": "Create a task to update the onboarding documentation" },
+      "output": {
+        "text": "Created the task \"Update the onboarding documentation\" with status pending in your list.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Update the onboarding documentation" }, "result": { "id": "task-rec-006", "status": "pending" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-007",
+      "input": { "query": "Schedule a weekly task to audit dependency versions" },
+      "output": {
+        "text": "Created \"Audit dependency versions\" and scheduled it weekly on Mondays at 10:00.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Audit dependency versions" }, "result": { "id": "task-rec-007", "status": "pending" }, "state": "result" },
+          { "toolName": "schedule_task", "args": { "taskId": "task-rec-007", "cron": "0 10 * * 1" }, "result": { "scheduled": true }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-008",
+      "input": { "query": "Mark the database migration task as completed" },
+      "output": {
+        "text": "Updated the task \"Database migration\": status is now completed.",
+        "toolInvocations": [
+          { "toolName": "update_task", "args": { "taskId": "task-rec-008", "status": "completed" }, "result": { "id": "task-rec-008", "status": "completed" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-009",
+      "input": { "query": "Create a low priority task to clean up unused feature flags" },
+      "output": {
+        "text": "Created the low priority task \"Clean up unused feature flags\" — status pending.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Clean up unused feature flags", "priority": "low" }, "result": { "id": "task-rec-009", "status": "pending" }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "task-010",
+      "input": { "query": "Create a task to prepare the quarterly roadmap review and schedule it" },
+      "output": {
+        "text": "Created \"Prepare the quarterly roadmap review\" and scheduled it for the next planning day at 14:00.",
+        "toolInvocations": [
+          { "toolName": "create_task", "args": { "title": "Prepare the quarterly roadmap review" }, "result": { "id": "task-rec-010", "status": "pending" }, "state": "result" },
+          { "toolName": "schedule_task", "args": { "taskId": "task-rec-010", "cron": "0 14 * * 2" }, "result": { "scheduled": true }, "state": "result" }
+        ]
+      }
+    }
+  ]
+}

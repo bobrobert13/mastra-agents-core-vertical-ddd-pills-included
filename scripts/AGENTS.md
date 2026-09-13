@@ -13,6 +13,7 @@ Operator-facing bash scripts wired to npm scripts (`init`, `health-check`, `upda
 | `init.sh` | Full bootstrap: Node check → deps (`--legacy-peer-deps`) → optional `.env` → lint + build + smoke/unit/integration → git init |
 | `health-check.sh` | 7 live probes on `MASTRA_PORT` (default 4111): `/health`, `/api/agents` (≥4), `/api/workflows` (deep-research), storage mode, provider keys, layout, deps. Missing `.env`/keys are warnings; exit 0 only when the instance is healthy |
 | `update-mastra.sh` | Bumps all 7 Mastra packages (`@latest --legacy-peer-deps`), checks codemods (never auto-applies), re-runs full gate (lint + tsc + test:all + build) |
+| `seed-eval-datasets.ts` | Evals seed sync (spec 07 §3.1): mirrors `tests/evals/datasets/*.json` into `mastra.datasets` on `EVAL_STORAGE_URL` (default throwaway `file:./eval-ci.db`); idempotent via `externalId`; runs under `node --experimental-strip-types` (local imports must carry `.ts` extensions — loader constraint) |
 
 ## For AI Agents
 

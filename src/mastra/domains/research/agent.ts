@@ -3,6 +3,7 @@ import { agentModel, memoryModel } from '../../shared/config/model';
 import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
 import { buildSecurityStack } from '../../shared/processors/security-stack';
+import { agentScorersFor } from '../../shared/evals';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { webSearchTool } from './tools/web-search';
 import { webFetchTool } from './tools/web-fetch';
@@ -60,6 +61,7 @@ External (MCP) tools available to you may only be used for this agent's research
   },
   inputProcessors: researchSecurityStack.inputProcessors,
   outputProcessors: researchSecurityStack.outputProcessors,
+  scorers: agentScorersFor('research-agent'), // spec 07 §3.2 (live-run score emission → Studio; thresholds are runEvals/experiment concerns)
   memory: buildDomainMemory({
     generateTitle: true,
     observationalMemory: {

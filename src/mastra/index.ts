@@ -7,6 +7,7 @@ import { logServiceAvailability } from './shared/config/service-status';
 import { VECTOR_STORE_NAME } from './shared/config/vectors';
 import { buildMcpServer } from './mcp/server';
 import { buildServerSurface } from './routes';
+import { buildEvalScorers } from './shared/evals';
 
 // Import domains
 import { researchAgent, deepResearchWorkflow } from './domains/research';
@@ -46,6 +47,8 @@ export const mastra = new Mastra({
   bundler: {
     externals: ['@anush008/tokenizers'],
   },
+  // spec 07 §3.2: map KEYS are the IDs startExperiment resolves + Studio lists
+  scorers: buildEvalScorers(),
   agents: {
     research: researchAgent,
     tasks: taskManagementAgent,

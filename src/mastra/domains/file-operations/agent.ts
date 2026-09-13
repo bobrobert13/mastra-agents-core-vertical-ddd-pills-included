@@ -3,6 +3,7 @@ import { agentModel } from '../../shared/config/model';
 import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
 import { buildSecurityStack } from '../../shared/processors/security-stack';
+import { agentScorersFor } from '../../shared/evals';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { readFileTool } from './tools/read-file';
 import { writeFileTool } from './tools/write-file';
@@ -62,6 +63,7 @@ Always be precise and cautious with file operations.`
   },
   inputProcessors: fileOperationsSecurityStack.inputProcessors,
   outputProcessors: fileOperationsSecurityStack.outputProcessors,
+  scorers: agentScorersFor('file-operations-agent'), // spec 07 §3.2 (live-run score emission → Studio; thresholds are runEvals/experiment concerns)
   memory: buildDomainMemory({
     generateTitle: true,
   }),

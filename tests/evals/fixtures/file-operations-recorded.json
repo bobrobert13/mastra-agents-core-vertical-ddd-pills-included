@@ -1,0 +1,48 @@
+{
+  "agentId": "file-operations-agent",
+  "recordedAt": "2026-09-12",
+  "source": "RECORDING STUB — replace via evals-live.yml (Tier B regenerates fixtures from baseline-main experiments on main; spec 07 §3.3). Only OFFLINE-tier scorer means are tracked here; hallucination (the gotcha #7 gate) is judged in Tier B.",
+  "items": [
+    {
+      "itemId": "files-001",
+      "input": { "query": "Read notes.txt and tell me its first line" },
+      "output": {
+        "text": "The first line of notes.txt is \"Sprint goals for Q3\". The file contains 42 lines in total.",
+        "toolInvocations": [
+          { "toolName": "read_file", "args": { "path": "notes.txt" }, "result": { "lines": 42 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "files-002",
+      "input": { "query": "Write 'hello world' into greeting.txt" },
+      "output": {
+        "text": "Wrote \"hello world\" into greeting.txt successfully. The file now contains a single line.",
+        "toolInvocations": [
+          { "toolName": "write_file", "args": { "path": "greeting.txt", "content": "hello world" }, "result": { "written": true }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "files-003",
+      "input": { "query": "Replace TODO with DONE in checklist.md" },
+      "output": {
+        "text": "Edited checklist.md: every occurrence of TODO was replaced with DONE (3 replacements made).",
+        "toolInvocations": [
+          { "toolName": "read_file", "args": { "path": "checklist.md" }, "result": { "lines": 12 }, "state": "result" },
+          { "toolName": "edit_file", "args": { "path": "checklist.md", "from": "TODO", "to": "DONE" }, "result": { "replacements": 3 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "files-004",
+      "input": { "query": "Does config.yaml exist in the project root?" },
+      "output": {
+        "text": "config.yaml does not exist in the project root. I checked the root directory listing and it only contains docker/, src/, and tests/ folders plus package.json.",
+        "toolInvocations": [
+          { "toolName": "read_file", "args": { "path": "config.yaml" }, "result": { "error": "ENOENT" }, "state": "result" }
+        ]
+      }
+    }
+  ]
+}

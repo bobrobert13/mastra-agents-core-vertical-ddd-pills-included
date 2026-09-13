@@ -66,6 +66,8 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
 | Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
 | Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
+| Eval datasets/experiments | `EVAL_STORAGE_URL` (seed script default `file:./eval-ci.db`; suites default `:memory:`) | native `mastra.datasets` storage domain (ADR-010); git JSON = reviewed seed source |
+| Eval judge model | `EVAL_JUDGE_MODEL` (> `MODEL` > `DEFAULT_MODEL`) | judges only; code-based scorers never call a model (spec 07) |
 | Scope guard | on by default (`SCOPE_GUARD_MODEL` optional) | `SCOPE_GUARD=off` disables; inert (fail-open) with no provider key |
 | MCP client (inbound) | `MCP_SERVERS` (JSON; `${VAR}` interpolation; `agents` routing key) | `○ MCP client` off — set `MCP_SERVERS` to connect external servers; set-but-invalid JSON **fails boot** (spec 04) |
 | MCP server (outbound) | `ENABLE_MCP_SERVER=true` (exact string) | `○ MCP server` disabled — read-only surface; requires Spec 01 auth outside localhost |
@@ -101,7 +103,7 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`, `ci:`). Subject ≤ 72 chars, imperative mood, body only when the *why* isn't obvious.
 - **Branches**: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`, `docs/<slug>`.
 - **PRs**: title follows commit convention; description = Summary bullets + Test plan checklist.
-- **CI gates** (`.github/workflows/ci.yml`): lint, build, test-smoke, test-unit, test-integration, test-evals. A PR is mergeable only when all pass. `package-lock.json` **must stay committed** (jobs use `npm ci` + workflow-level `npm_config_legacy_peer_deps=true`).
+- **CI gates** (`.github/workflows/ci.yml`): lint, typecheck, build, coverage, test-smoke, test-unit, test-integration, test-evals — **all blocking** (spec 07; `coverage` = `npm run test:coverage:gate`, thresholds in `vitest.config.ts`: statements/lines ≥ 74, branches ≥ 70, functions ≥ 55, ratchet-only). LLM-judge experiments run in a separate non-merge-gating workflow (`.github/workflows/evals-live.yml`: schedule + dispatch + push main). A PR is mergeable only when all pass. `package-lock.json` **must stay committed** (jobs use `npm ci` + workflow-level `npm_config_legacy_peer_deps=true`).
 - Do not commit `.env`, `*.db*`, `.mastra/`, `node_modules/` (already gitignored).
 
 ### Updating Dependencies (self-update system)

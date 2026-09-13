@@ -210,4 +210,10 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
   it('the composition root still boots and exposes its server config', () => {
     expect(() => mastra.getServer()).not.toThrow();
   });
+
+  it('MCP: zero-config ⇒ no subprocess, empty tools, no boilerplate server registered', async () => {
+    const { loadMcpToolsFor } = await import('../../src/mastra/shared/config/mcp');
+    expect(await loadMcpToolsFor('research')).toEqual({});
+    expect(Object.keys(mastra.listMCPServers?.() ?? {})).not.toContain('boilerplate');
+  });
 });

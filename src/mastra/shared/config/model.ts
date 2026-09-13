@@ -58,6 +58,16 @@ export const memoryModel = () => resolveModel('observational-memory');
 /** Model for the scope-guard classifier (keep cheap: one extra call per turn). */
 export const guardModel = (): string => env('SCOPE_GUARD_MODEL') ?? env('MODEL') ?? DEFAULT_MODEL;
 
+/**
+ * Model for LLM-as-judge eval scorers (spec 07 §3.2). NEVER hard-coded a
+ * model string (gotcha #5): `EVAL_JUDGE_MODEL` > `MODEL` > `DEFAULT_MODEL`.
+ * Consumed ONLY by the genuinely LLM-based judges (answer-relevancy,
+ * faithfulness, hallucination, bias) — the code-based scorers
+ * (completeness, tone, keyword-coverage, research-relevance) take no model.
+ * Unset ⇒ defaults, never an error (zero-config rule).
+ */
+export const judgeModel = (): string => env('EVAL_JUDGE_MODEL') ?? env('MODEL') ?? DEFAULT_MODEL;
+
 // ---------------------------------------------------------------------------
 // Embedder resolution (spec 03 §3.2)
 // ---------------------------------------------------------------------------

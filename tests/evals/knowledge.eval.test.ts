@@ -3,21 +3,16 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import dataset from './datasets/knowledge-dataset.json';
+import { hasProviderKey } from './gates/_helpers';
 
 /**
- * OKR-2 evals tier (spec 03 §3.11): STRUCTURAL today — every case's expected
- * chunk must exist verbatim inside the pinned fixture, so a fixture edit that
- * breaks the RAG expectations fails here, offline. The 8/10 answer-quality
- * bar needs generate() with a real LLM (gotcha G5) → the live block is
- * skipIf-guarded and stays green-skipped without keys.
+ * OKR-2 evals tier (spec 03 §3.11 + spec 07 §3.3 tier taxonomy):
+ * STRUCTURAL today — every case's expected chunk must exist verbatim inside
+ * the pinned fixture, so a fixture edit that breaks the RAG expectations
+ * fails here, offline (Tier A schema suite). The 8/10 answer-quality bar
+ * needs generate() with a real LLM (gotcha G5) → the live block is
+ * skipIf-guarded and stays green-skipped without keys (Scenario 5 contract).
  */
-
-const hasProviderKey = [
-  'DEEPINFRA_API_KEY',
-  'OPENAI_API_KEY',
-  'ANTHROPIC_API_KEY',
-  'GOOGLE_API_KEY',
-].some(k => (process.env[k] ?? '').trim() !== '');
 
 describe('knowledge eval dataset — structural contracts (offline)', () => {
   const fixturePath = path.join(process.cwd(), dataset.fixture);
@@ -40,11 +35,13 @@ describe('knowledge eval dataset — structural contracts (offline)', () => {
   });
 });
 
-describe.skipIf(!hasProviderKey)('knowledge answer quality — live 8/10 bar', () => {
+describe.skipIf(!hasProviderKey())('knowledge answer quality — live 8/10 bar', () => {
   // Needs a provider key (G5): index the fixture, generate answers with the
   // research agent + search_knowledge, judge containment of
-  // expectedChunkContains. Wired here once evals scoring for RAG lands in
-  // Phase 4 — until then this block is skipIf-protected by design.
+  // expectedChunkContains. RAG answer-quality scorers (context-precision /
+  // -relevance / -recall) register on research-agent once their spec-03
+  // deferred wiring lands (spec 07 §3.2 deferred row) — until then this
+  // block is skipIf-protected by design.
   it('is skipped without provider keys', () => {
     expect(dataset.qualityBar.answerAccuracy).toBe(8);
   });

@@ -1,0 +1,111 @@
+{
+  "agentId": "research-agent",
+  "recordedAt": "2026-09-12",
+  "source": "RECORDING STUB — replace via evals-live.yml (Tier B regenerates fixtures from baseline-main experiments on main; spec 07 §3.3). Shapes verified against installed @mastra/evals message run format.",
+  "items": [
+    {
+      "itemId": "research-001",
+      "input": { "query": "What is TypeScript?" },
+      "output": {
+        "text": "TypeScript is a strongly typed programming language that builds on JavaScript, adding optional static typing, generics, and tooling. Sources: https://www.typescriptlang.org/docs/handbook/intro.html and https://en.wikipedia.org/wiki/TypeScript",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "What is TypeScript" }, "result": { "count": 5 }, "state": "result" },
+          { "toolName": "summarize", "args": { "maxLength": 500 }, "result": { "length": 280 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-002",
+      "input": { "query": "What is the weather in Quito?" },
+      "output": {
+        "text": "Current weather information for Quito: a mild highland climate around 13-19 degrees Celsius with intermittent rain and strong UV at altitude. Sources: https://weather.com/weather/today and https://worldweatheronline.com/quito",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "weather in Quito" }, "result": { "count": 4 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-003",
+      "input": { "query": "Tell me about Mastra framework" },
+      "output": {
+        "text": "Mastra is a TypeScript framework for building AI agents: it provides agents, workflows, RAG, evals, and observability, deployable anywhere Node runs. Sources: https://mastra.ai/docs and https://github.com/mastra-ai/mastra",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "Mastra framework" }, "result": { "count": 6 }, "state": "result" },
+          { "toolName": "web_fetch", "args": { "url": "https://mastra.ai/docs" }, "result": { "status": 200 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-004",
+      "input": { "query": "What is retrieval augmented generation?" },
+      "output": {
+        "text": "Retrieval augmented generation (RAG) grounds model answers in retrieved documents: relevant chunks are fetched from a vector index and injected into the prompt, reducing hallucination. Sources: https://en.wikipedia.org/wiki/Prompt_engineering and https://mastra.ai/docs/rag",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "retrieval augmented generation" }, "result": { "count": 5 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-005",
+      "input": { "query": "How does LibSQL differ from SQLite?" },
+      "output": {
+        "text": "LibSQL differs from SQLite as a fork that adds replication, embedded replicas, and multiple API-compatible distributions, keeping SQLite's semantics while scaling reads. Sources: https://tour.libsql.com and https://github.com/tursodatabase/libsql",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "LibSQL SQLite difference" }, "result": { "count": 4 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-006",
+      "input": { "query": "What are embedding models used for?" },
+      "output": {
+        "text": "Embedding models turn text into dense vectors so semantically similar strings land close together, powering semantic search, clustering, recall, and classification. Sources: https://mastra.ai/docs and https://en.wikipedia.org/wiki/Word_embedding",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "embedding models uses" }, "result": { "count": 3 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-007",
+      "input": { "query": "Summarize the CAP theorem in distributed systems" },
+      "output": {
+        "text": "The CAP theorem states a distributed system cannot simultaneously guarantee consistency, availability, and partition tolerance — during a network partition you trade consistency for availability or the reverse. Sources: https://en.wikipedia.org/wiki/CAP_theorem",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "CAP theorem distributed systems" }, "result": { "count": 5 }, "state": "result" },
+          { "toolName": "summarize", "args": { "maxLength": 400 }, "result": { "length": 240 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-008",
+      "input": { "query": "What is OpenTelemetry and why use it with AI agents?" },
+      "output": {
+        "text": "OpenTelemetry provides vendor-neutral traces and metrics; with AI agents it gives observability of LLM calls, tool invocations, and token cost so regressions and hallucination loops become visible. Sources: https://opentelemetry.io/docs and https://mastra.ai/docs/observability",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "OpenTelemetry AI agents" }, "result": { "count": 4 }, "state": "result" },
+          { "toolName": "web_fetch", "args": { "url": "https://opentelemetry.io/docs" }, "result": { "status": 200 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-009",
+      "input": { "query": "Explain vertical slice architecture" },
+      "output": {
+        "text": "Vertical slice architecture organizes code by feature end-to-end (UI, domain, data together in one folder) instead of by technical layer, so each slice is independently understandable and removable. Sources: https://jeremydmiller.com vertical slicing article",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "vertical slice architecture" }, "result": { "count": 3 }, "state": "result" }
+        ]
+      }
+    },
+    {
+      "itemId": "research-010",
+      "input": { "query": "What is LLM-as-a-judge evaluation?" },
+      "output": {
+        "text": "LLM-as-a-judge evaluation uses a capable model to score another model's output against explicit criteria such as relevancy, faithfulness, and hallucination, approximating human review at scale. Sources: https://mastra.ai/docs/evals and https://arxiv.org/abs/2306.05685",
+        "toolInvocations": [
+          { "toolName": "web_search", "args": { "query": "LLM as a judge evaluation" }, "result": { "count": 5 }, "state": "result" }
+        ]
+      }
+    }
+  ]
+}

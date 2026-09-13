@@ -1,13 +1,11 @@
 {
   "name": "research-dataset",
-  "description": "Test cases for research agent",
-  "version": "1.0.0",
+  "description": "Test cases for research agent (canonical seed → mirrored into mastra.datasets by scripts/seed-eval-datasets.ts; spec 07 §3.1)",
+  "version": "2.0.0",
   "items": [
     {
       "id": "research-001",
-      "input": {
-        "query": "What is TypeScript?"
-      },
+      "input": { "query": "What is TypeScript?" },
       "groundTruth": {
         "expectedAnswer": "TypeScript is a strongly typed programming language that builds on JavaScript",
         "requiredTools": ["web_search"],
@@ -16,9 +14,7 @@
     },
     {
       "id": "research-002",
-      "input": {
-        "query": "What is the weather in Quito?"
-      },
+      "input": { "query": "What is the weather in Quito?" },
       "groundTruth": {
         "expectedAnswer": "Current weather information for Quito",
         "requiredTools": ["web_search"],
@@ -27,13 +23,74 @@
     },
     {
       "id": "research-003",
-      "input": {
-        "query": "Tell me about Mastra framework"
-      },
+      "input": { "query": "Tell me about Mastra framework" },
       "groundTruth": {
         "expectedAnswer": "Mastra is a TypeScript framework for building AI agents",
         "requiredTools": ["web_search", "web_fetch"],
         "minSources": 2
+      }
+    },
+    {
+      "id": "research-004",
+      "input": { "query": "What is retrieval augmented generation?" },
+      "groundTruth": {
+        "expectedAnswer": "RAG grounds model answers in retrieved documents",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-005",
+      "input": { "query": "How does LibSQL differ from SQLite?" },
+      "groundTruth": {
+        "expectedAnswer": "LibSQL is a fork of SQLite with replication and embedded replicas",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-006",
+      "input": { "query": "What are embedding models used for?" },
+      "groundTruth": {
+        "expectedAnswer": "Embeddings turn text into vectors for semantic search",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-007",
+      "input": { "query": "Summarize the CAP theorem in distributed systems" },
+      "groundTruth": {
+        "expectedAnswer": "A distributed system cannot simultaneously guarantee consistency, availability, and partition tolerance",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-008",
+      "input": { "query": "What is OpenTelemetry and why use it with AI agents?" },
+      "groundTruth": {
+        "expectedAnswer": "OpenTelemetry provides vendor-neutral traces and metrics; for agents it gives observability of LLM and tool calls",
+        "requiredTools": ["web_search", "web_fetch"],
+        "minSources": 2
+      }
+    },
+    {
+      "id": "research-009",
+      "input": { "query": "Explain vertical slice architecture" },
+      "groundTruth": {
+        "expectedAnswer": "Vertical slices organize code by feature end-to-end instead of by technical layer",
+        "requiredTools": ["web_search"],
+        "minSources": 1
+      }
+    },
+    {
+      "id": "research-010",
+      "input": { "query": "What is LLM-as-a-judge evaluation?" },
+      "groundTruth": {
+        "expectedAnswer": "LLM-as-a-judge uses a capable model to score another model's output against criteria",
+        "requiredTools": ["web_search"],
+        "minSources": 1
       }
     }
   ]
