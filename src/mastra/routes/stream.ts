@@ -42,7 +42,9 @@ function uiMessageStreamResponse(parts: ReadableStream<unknown>): Response {
         }
       } catch (error) {
         const errorText = error instanceof Error ? error.message : String(error);
-        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', errorText })}\n\n`));
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ type: 'error', errorText })}\n\n`)
+        );
       }
       controller.enqueue(encoder.encode('data: [DONE]\n\n'));
       controller.close();
@@ -76,7 +78,9 @@ export const agentStreamRoute = registerApiRoute('/stream/:agentId', {
     // TS just cannot distribute the role-union across the message-shape union,
     // so the per-element assertion below is the typed bridge (content: string
     // is a legal member of every role's content type).
-    const messages = parsed.data.messages.map(m => ({ role: m.role, content: m.content }) as CoreMessage);
+    const messages = parsed.data.messages.map(
+      m => ({ role: m.role, content: m.content }) as CoreMessage
+    );
 
     const output = await agent.stream(messages, {
       memory: parsed.data.memory,
@@ -84,7 +88,7 @@ export const agentStreamRoute = registerApiRoute('/stream/:agentId', {
     });
 
     return uiMessageStreamResponse(
-      toAISdkStream(output, { from: 'agent' }) as unknown as ReadableStream<unknown>,
+      toAISdkStream(output, { from: 'agent' }) as unknown as ReadableStream<unknown>
     );
   },
 });

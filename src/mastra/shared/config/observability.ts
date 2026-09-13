@@ -76,7 +76,7 @@ export function buildObservability(services: ServiceRegistry): Observability | u
       if (effective !== otlpEndpoint) {
         logger.warn(
           `OTEL_EXPORTER_OTLP_ENDPOINT="${otlpEndpoint}" has no /v1/traces path — ` +
-            `the OtelExporter needs the FULL traces URL; exporting to ${effective} instead.`,
+            `the OtelExporter needs the FULL traces URL; exporting to ${effective} instead.`
         );
       }
       exporters.push(new OtelExporter({ provider: { custom: { endpoint: effective } } }));
@@ -85,9 +85,13 @@ export function buildObservability(services: ServiceRegistry): Observability | u
       logger.warn(
         'OTEL_EXPORTER_OTLP_ENDPOINT is set but @mastra/otel-exporter (or its OTLP protocol ' +
           'peer) is not installed — traces stay storage-only. Opt in: ' +
-          'npm i @mastra/otel-exporter --legacy-peer-deps',
+          'npm i @mastra/otel-exporter --legacy-peer-deps'
       );
-      services.push({ name: 'OTLP export', active: false, detail: 'endpoint set, package missing' });
+      services.push({
+        name: 'OTLP export',
+        active: false,
+        detail: 'endpoint set, package missing',
+      });
     }
   } else {
     services.push({

@@ -39,7 +39,9 @@ describe('gate-runner — fixture run shape', () => {
       input: { query: 'What is the capital of France?' },
       output: {
         text: 'Paris.',
-        toolInvocations: [{ toolName: 'web_search', args: { q: 'x' }, result: { n: 1 }, state: 'result' }],
+        toolInvocations: [
+          { toolName: 'web_search', args: { q: 'x' }, result: { n: 1 }, state: 'result' },
+        ],
       },
     });
     expect(run.input.inputMessages).toHaveLength(1);
@@ -59,7 +61,9 @@ describe('gate-runner — verdict aggregation', () => {
         itemId: 'u-1',
         // answer covers only capital+population, omits area+mayor → ~0.6
         input: { query: 'What is the capital of France, its population, area and mayor?' },
-        output: { text: 'The capital of France is Paris, with a population of 2.1 million people.' },
+        output: {
+          text: 'The capital of France is Paris, with a population of 2.1 million people.',
+        },
       },
     ],
   };

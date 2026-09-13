@@ -60,9 +60,21 @@ export function buildEvalScorerEntries(): RegistryScorer[] {
   // (judgeModel() is only READ here; no network call happens at construction).
   const model = judgeModel();
   return [
-    { id: EVAL_SCORER_IDS.answerRelevancy, tier: 'online', scorer: createAnswerRelevancyScorer({ model }) },
-    { id: EVAL_SCORER_IDS.faithfulness, tier: 'online', scorer: createFaithfulnessScorer({ model }) },
-    { id: EVAL_SCORER_IDS.hallucination, tier: 'online', scorer: createHallucinationScorer({ model }) },
+    {
+      id: EVAL_SCORER_IDS.answerRelevancy,
+      tier: 'online',
+      scorer: createAnswerRelevancyScorer({ model }),
+    },
+    {
+      id: EVAL_SCORER_IDS.faithfulness,
+      tier: 'online',
+      scorer: createFaithfulnessScorer({ model }),
+    },
+    {
+      id: EVAL_SCORER_IDS.hallucination,
+      tier: 'online',
+      scorer: createHallucinationScorer({ model }),
+    },
     { id: EVAL_SCORER_IDS.bias, tier: 'online', scorer: createBiasScorer({ model }) },
     { id: EVAL_SCORER_IDS.completeness, tier: 'offline', scorer: createCompletenessScorer() },
     { id: EVAL_SCORER_IDS.tone, tier: 'offline', scorer: createToneScorer() },

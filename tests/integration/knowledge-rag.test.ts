@@ -19,7 +19,16 @@ import { createHashingEmbedder, createFixedDimEmbedder } from '../helpers/determ
 
 const FIXTURE = path.join(process.cwd(), 'tests/fixtures/knowledge/onboarding.md');
 
-type WfOk = { status: string; result?: { docId: string; indexName: string; dimension: number; chunkCount: number; skippedChunks: number } };
+type WfOk = {
+  status: string;
+  result?: {
+    docId: string;
+    indexName: string;
+    dimension: number;
+    chunkCount: number;
+    skippedChunks: number;
+  };
+};
 const wfOk = (r: unknown): WfOk['result'] => {
   const w = r as WfOk;
   expect(w.status).toBe('success');
@@ -36,7 +45,9 @@ describe('Scenario 5 — index fixture, then search_knowledge returns the pinned
     const vector = new LibSQLVector({ id: 'rag-it-vector', url: 'file::memory:' });
 
     const workflow = createIndexKnowledgeWorkflow({ embedder: embedder.model, vector });
-    const result = await (await workflow.createRun()).start({
+    const result = await (
+      await workflow.createRun()
+    ).start({
       inputData: {
         source: 'path',
         path: FIXTURE,
@@ -60,9 +71,7 @@ describe('Scenario 5 — index fixture, then search_knowledge returns the pinned
 
     // chunk text lives in METADATA (PgVector/LibSQLVector do not populate
     // `document` on query()) — spec 03 Scenario 5 parenthetical.
-    const texts = (out.sources ?? [])
-      .map(s => String(s.metadata?.text ?? ''))
-      .join('\n');
+    const texts = (out.sources ?? []).map(s => String(s.metadata?.text ?? '')).join('\n');
     expect(out.sources?.length).toBeGreaterThan(0);
     expect(texts).toContain('€2,000 laptop budget');
   });
@@ -89,9 +98,16 @@ describe('Scenario 5 — index fixture, then search_knowledge returns the pinned
     expect(stats.count).toBe(wfOk(r2)!.chunkCount);
 
     const tool = createKnowledgeQueryTool({ embedder: embedder.model, vector });
-    const out = await runTool<ToolResult>(tool!, { queryText: 'when is quarterly planning', topK: 1 });
+    const out = await runTool<ToolResult>(tool!, {
+      queryText: 'when is quarterly planning',
+      topK: 1,
+    });
     const meta = out.sources?.[0]?.metadata;
-    expect(meta).toMatchObject({ docId: 'planning-doc', source: 'inline', embedder: 'stub/hashing-256' });
+    expect(meta).toMatchObject({
+      docId: 'planning-doc',
+      source: 'inline',
+      embedder: 'stub/hashing-256',
+    });
   });
 });
 
@@ -99,14 +115,28 @@ describe('Scenario 6 (CI half) — sticky-dimension hazard fail-fast', () => {
   it('1024d index + 1536d embedder → store-chunks fails, zero vectors written', async () => {
     const e5Stub = createHashingEmbedder(1024);
     const vector = new LibSQLVector({ id: 'rag-it-vector-3', url: 'file::memory:' });
-    await (await createIndexKnowledgeWorkflow({ embedder: e5Stub.model, vector }).createRun()).start({
-      inputData: { source: 'inline', content: 'first document indexed at the original dimension', contentType: 'text', docId: 'first' },
+    await (
+      await createIndexKnowledgeWorkflow({ embedder: e5Stub.model, vector }).createRun()
+    ).start({
+      inputData: {
+        source: 'inline',
+        content: 'first document indexed at the original dimension',
+        contentType: 'text',
+        docId: 'first',
+      },
     });
     const before = await vector.describeIndex({ indexName: KNOWLEDGE_INDEX_NAME });
 
     const routerStub = createFixedDimEmbedder(1536);
-    const failed = await (await createIndexKnowledgeWorkflow({ embedder: routerStub, vector }).createRun()).start({
-      inputData: { source: 'inline', content: 'second document after switching EMBEDDING_MODEL', contentType: 'text', docId: 'second' },
+    const failed = await (
+      await createIndexKnowledgeWorkflow({ embedder: routerStub, vector }).createRun()
+    ).start({
+      inputData: {
+        source: 'inline',
+        content: 'second document after switching EMBEDDING_MODEL',
+        contentType: 'text',
+        docId: 'second',
+      },
     });
 
     expect(failed.status).toBe('failed');

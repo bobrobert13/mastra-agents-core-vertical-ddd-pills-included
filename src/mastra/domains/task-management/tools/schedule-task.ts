@@ -61,7 +61,10 @@ export const scheduleTaskTool = createTool({
       .string()
       .optional()
       .describe('Back-compat interval, e.g. "15m", "1h", "2d" — converted to a cron'),
-    timezone: z.string().optional().describe('IANA timezone, e.g. "Europe/Madrid" (default: host/UTC)'),
+    timezone: z
+      .string()
+      .optional()
+      .describe('IANA timezone, e.g. "Europe/Madrid" (default: host/UTC)'),
     prompt: z.string().optional().describe('Reminder prompt injected into the agent on each fire'),
     schedule: z
       .object({
@@ -85,7 +88,10 @@ export const scheduleTaskTool = createTool({
     nextFireAt: z.number().optional(),
     message: z.string(),
   }),
-  execute: async ({ taskId, cron, interval, timezone, prompt, schedule, enabled = true }, context) => {
+  execute: async (
+    { taskId, cron, interval, timezone, prompt, schedule, enabled = true },
+    context
+  ) => {
     const fail = (
       reason: 'INVALID_SCHEDULE' | 'SCHEDULING_UNAVAILABLE' | 'TASK_NOT_FOUND' | 'SCHEDULE_ERROR',
       message: string
@@ -131,13 +137,19 @@ export const scheduleTaskTool = createTool({
     const rawId = `task-${taskId}`;
     const status = enabled ? ('active' as const) : ('paused' as const);
     const reminder =
-      reminderPrompt ?? `Reminder: task ${taskId} — "${task.title}" is due for review (cron ${resolvedCron}).`;
+      reminderPrompt ??
+      `Reminder: task ${taskId} — "${task.title}" is due for review (cron ${resolvedCron}).`;
 
     let row: AnySchedule;
     try {
       const existing = await schedules.get(rawId);
       row = existing
-        ? await schedules.update(rawId, { cron: resolvedCron, timezone: tz, prompt: reminder, status })
+        ? await schedules.update(rawId, {
+            cron: resolvedCron,
+            timezone: tz,
+            prompt: reminder,
+            status,
+          })
         : await schedules.create({
             id: rawId,
             agentId: AGENT_ID,
@@ -173,7 +185,9 @@ export const scheduleTaskTool = createTool({
     // Record the real row id (normalized `agent_task-…`) on the task row.
     const attached = await repo.attachSchedule(taskId, row.id);
     if (!attached) {
-      logger.warn(`[schedule_task] schedule ${row.id} created but task ${taskId} vanished; row not linked.`);
+      logger.warn(
+        `[schedule_task] schedule ${row.id} created but task ${taskId} vanished; row not linked.`
+      );
     }
 
     const event: TaskScheduledEvent = {
@@ -182,7 +196,9 @@ export const scheduleTaskTool = createTool({
     };
     await eventBus.publish(event);
 
-    logger.info(`[schedule_task] task ${taskId} → schedule ${row.id} (${resolvedCron}${tz ? ` ${tz}` : ''})`);
+    logger.info(
+      `[schedule_task] task ${taskId} → schedule ${row.id} (${resolvedCron}${tz ? ` ${tz}` : ''})`
+    );
 
     return {
       taskId,

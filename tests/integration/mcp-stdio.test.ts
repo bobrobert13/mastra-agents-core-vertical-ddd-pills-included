@@ -54,7 +54,10 @@ const alive = (pid: number): boolean => {
 
 describe.skipIf(!hasMcp)('MCP stdio integration (spec 04)', () => {
   it('requires the echo helper artifact when @mastra/mcp is installed', () => {
-    expect(existsSync(HELPER), `missing ${HELPER} — create it per .artifacts/integration-brief-04.md`).toBe(true);
+    expect(
+      existsSync(HELPER),
+      `missing ${HELPER} — create it per .artifacts/integration-brief-04.md`
+    ).toBe(true);
   });
 
   it('buildMcpClient: returns the singleton + active banner line, spawns nothing yet', () => {

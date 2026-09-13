@@ -36,7 +36,10 @@ function messages(count: number): never[] {
   return Array.from({ length: count }, (_, i) => ({
     id: `m-${i}`,
     role: 'user' as const,
-    content: { format: 2, parts: [{ type: 'text' as const, text: `rememberable note number ${i}` }] },
+    content: {
+      format: 2,
+      parts: [{ type: 'text' as const, text: `rememberable note number ${i}` }],
+    },
     threadId: 'thread-a',
     resourceId: 'user-a',
   })) as never[];
@@ -50,10 +53,13 @@ describe('Scenario 4c — throwing embedder via the buildDomainMemory seam', () 
     // First "request": memory built while recall is believed available.
     const first = createThrowingEmbedder();
     const vector = new LibSQLVector({ id: 'degrade-v', url: 'file::memory:' });
-    const memory = await v.buildDomainMemory({ generateTitle: true }, {
-      embedder: first.model,
-      vector,
-    })({ requestContext: {} as never });
+    const memory = await v.buildDomainMemory(
+      { generateTitle: true },
+      {
+        embedder: first.model,
+        vector,
+      }
+    )({ requestContext: {} as never });
     memory.setStorage(new LibSQLStore({ id: 'degrade-s', url: 'file::memory:' }));
     await memory.createThread({ threadId: 'thread-a', resourceId: 'user-a' });
 
@@ -79,10 +85,13 @@ describe('Scenario 4c — throwing embedder via the buildDomainMemory seam', () 
 
     // Second "request": fresh factory build — recall OFF, history works.
     const second = createThrowingEmbedder();
-    const memory2 = await v.buildDomainMemory({ generateTitle: true }, {
-      embedder: second.model,
-      vector: new LibSQLVector({ id: 'degrade-v2', url: 'file::memory:' }),
-    })({ requestContext: {} as never });
+    const memory2 = await v.buildDomainMemory(
+      { generateTitle: true },
+      {
+        embedder: second.model,
+        vector: new LibSQLVector({ id: 'degrade-v2', url: 'file::memory:' }),
+      }
+    )({ requestContext: {} as never });
     memory2.setStorage(new LibSQLStore({ id: 'degrade-s2', url: 'file::memory:' }));
     await memory2.createThread({ threadId: 'thread-a', resourceId: 'user-a' });
     await memory2.saveMessages({ messages: messages(3) });
@@ -90,7 +99,9 @@ describe('Scenario 4c — throwing embedder via the buildDomainMemory seam', () 
     expect(second.calls).toBe(0); // no retry storm
     const list = await memory2.recall({ threadId: 'thread-a', resourceId: 'user-a' } as never);
     expect(list.messages.length).toBeGreaterThan(0);
-    expect(warn.mock.calls.filter(c => String(c[0]).startsWith('Semantic recall: off (no embedder)'))).toHaveLength(1);
+    expect(
+      warn.mock.calls.filter(c => String(c[0]).startsWith('Semantic recall: off (no embedder)'))
+    ).toHaveLength(1);
   });
 
   const liveOffline =
@@ -103,7 +114,10 @@ describe('Scenario 4c — throwing embedder via the buildDomainMemory seam', () 
       const v = await freshVectors();
       const { resolveEmbedder } = await import('../../src/mastra/shared/config/model');
       const r = resolveEmbedder();
-      const memory = await v.buildDomainMemory({ generateTitle: true }, {})({
+      const memory = await v.buildDomainMemory(
+        { generateTitle: true },
+        {}
+      )({
         requestContext: {} as never,
       });
       memory.setStorage(new LibSQLStore({ id: 'live-s', url: 'file::memory:' }));

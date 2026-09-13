@@ -7,7 +7,13 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TripWire } from '@mastra/core/agent';
-import { buildSecurityStack, registerSecurityStackStatus, scanToolOutputForInjection, securityMode, securityModel } from '../../../../src/mastra/shared/processors/security-stack';
+import {
+  buildSecurityStack,
+  registerSecurityStackStatus,
+  scanToolOutputForInjection,
+  securityMode,
+  securityModel,
+} from '../../../../src/mastra/shared/processors/security-stack';
 import type { DomainScope } from '../../../../src/mastra/shared/processors/scope-guard';
 
 const scope: DomainScope = {
@@ -18,7 +24,12 @@ const scope: DomainScope = {
   siblings: [],
 };
 
-const PROVIDER_KEYS = ['DEEPINFRA_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY'];
+const PROVIDER_KEYS = [
+  'DEEPINFRA_API_KEY',
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GOOGLE_API_KEY',
+];
 const STACK_ENV = [
   'SECURITY_PROCESSORS',
   'SECURITY_MODEL',
@@ -182,7 +193,9 @@ describe('buildSecurityStack — composition order', () => {
   it('cache removal: RESPONSE_CACHE=off or disableResponseCache (mutating-tool agents)', () => {
     setProviderKey();
     process.env.RESPONSE_CACHE = 'off';
-    expect(ids(buildSecurityStack({ scope }).inputProcessors)).not.toContain('mastra/response-cache');
+    expect(ids(buildSecurityStack({ scope }).inputProcessors)).not.toContain(
+      'mastra/response-cache'
+    );
     delete process.env.RESPONSE_CACHE;
     expect(
       ids(buildSecurityStack({ scope, disableResponseCache: true }).inputProcessors)
@@ -202,7 +215,10 @@ describe('buildSecurityStack — composition order', () => {
 
   it('extraInput is appended last (domain-specific processors)', () => {
     setProviderKey();
-    const custom = { id: 'custom-processor', processInput: async (args: { messages: unknown[] }) => args.messages };
+    const custom = {
+      id: 'custom-processor',
+      processInput: async (args: { messages: unknown[] }) => args.messages,
+    };
     const stack = buildSecurityStack({ scope, extraInput: [custom as never] });
     expect(stack.inputProcessors.at(-1)?.id).toBe('custom-processor');
   });
@@ -268,7 +284,11 @@ describe('TokenLimiter runtime semantics (Scenario 3)', () => {
     expect(list.messages.length).toBeLessThan(20);
     expect(list.messages.length).toBeGreaterThan(0);
     // most recent kept
-    expect(((list.messages.at(-1)!.content as { parts: unknown[] }).parts[0] as { text: string }).text.endsWith('19')).toBe(true);
+    expect(
+      (
+        (list.messages.at(-1)!.content as { parts: unknown[] }).parts[0] as { text: string }
+      ).text.endsWith('19')
+    ).toBe(true);
   });
 });
 

@@ -20,7 +20,8 @@ import { indexKnowledgeWorkflow, knowledgeQueryTool } from './domains/knowledge'
 // Fail-fast ONLY on malformed PRESENT env values (spec 08); absence is always legal.
 validateEnv();
 
-const { storage, vectors, observability, pubsub, auth, mcpClient, services } = buildInfrastructure();
+const { storage, vectors, observability, pubsub, auth, mcpClient, services } =
+  buildInfrastructure();
 
 // MCP server (spec 04 §3.3): composition-layer module — the ONLY place allowed to
 // import domain barrels for MCPServer assembly (ADR-007 carve-out); off unless ENABLE_MCP_SERVER=true.

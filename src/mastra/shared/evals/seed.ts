@@ -99,7 +99,9 @@ function readSeedItems(spec: EvalSeedSpec): Array<{
   groundTruth: unknown;
 }> {
   const raw = readFileSync(path.join(DATASETS_DIR, spec.file), 'utf8');
-  const parsed = JSON.parse(raw) as { items?: Array<{ id: string; input: unknown; groundTruth: unknown }> };
+  const parsed = JSON.parse(raw) as {
+    items?: Array<{ id: string; input: unknown; groundTruth: unknown }>;
+  };
   if (!Array.isArray(parsed.items)) {
     throw new Error(`Eval seed "${spec.file}" has no items[] array`);
   }

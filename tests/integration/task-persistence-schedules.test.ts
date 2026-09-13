@@ -4,11 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Mastra } from '@mastra/core/mastra';
 import { LibSQLStore } from '@mastra/libsql';
-import {
-  createAppDatabase,
-  resetAppDb,
-  type AppDatabase,
-} from '../../src/mastra/shared/config/db';
+import { createAppDatabase, resetAppDb, type AppDatabase } from '../../src/mastra/shared/config/db';
 import { createTaskRepository } from '../../src/mastra/domains/task-management/repo';
 
 /**
@@ -62,7 +58,7 @@ describe.skipIf(!isPostgres)('task repository on PostgreSQL (gated: DATABASE_URL
     expect(stale).toBeNull();
 
     const listed = await repo.listTasks({ excludeStatus: 'completed', limit: 100 });
-    expect(listed.some((t) => t.id === created.id)).toBe(true);
+    expect(listed.some(t => t.id === created.id)).toBe(true);
 
     await db.execute('DELETE FROM app_tasks WHERE id = $1', [created.id]);
   });
@@ -121,7 +117,7 @@ describe('schedules service probe (real Mastra, tmp LibSQL file)', () => {
     expect(fetched?.id).toBe('agent_task-probe-42');
 
     const listed = await mastra.schedules.list({ agentId: 'task-management-agent' });
-    expect(listed.some((s) => s.id === 'agent_task-probe-42')).toBe(true);
+    expect(listed.some(s => s.id === 'agent_task-probe-42')).toBe(true);
 
     // run() for an AGENT schedule publishes to the agent-schedules topic and
     // records NO trigger row — assert the claim record, not a fire.

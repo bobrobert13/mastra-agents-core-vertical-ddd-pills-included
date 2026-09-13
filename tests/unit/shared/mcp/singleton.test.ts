@@ -76,8 +76,12 @@ describe.skipIf(!hasMcp)('MCP client builder — singleton (spec 04 §3.3/§3.9)
 
     const line = services.find(s => s.name === 'MCP client');
     expect(line?.active).toBe(true);
-    expect(line?.detail).toContain('2 servers: wikipedia (stdio), weather (https://weather.example.com/mcp)');
-    expect(line?.detail).toContain('[warn] wikipedia: no inheritDefaultEnv:false — stdio env not isolated');
+    expect(line?.detail).toContain(
+      '2 servers: wikipedia (stdio), weather (https://weather.example.com/mcp)'
+    );
+    expect(line?.detail).toContain(
+      '[warn] wikipedia: no inheritDefaultEnv:false — stdio env not isolated'
+    );
     expect(line?.detail).toContain('[warn] weather: approval OFF — every tool runs unattended');
   });
 
@@ -92,6 +96,8 @@ describe.skipIf(!hasMcp)('MCP client builder — singleton (spec 04 §3.3/§3.9)
     process.env.MCP_SERVERS = '{wikipedia';
     const mcp = await load();
     const services: ServiceRegistry = [];
-    expect(() => mcp.buildMcpClient(services)).toThrow('[MCP] Invalid MCP_SERVERS: JSON parse failed');
+    expect(() => mcp.buildMcpClient(services)).toThrow(
+      '[MCP] Invalid MCP_SERVERS: JSON parse failed'
+    );
   });
 });

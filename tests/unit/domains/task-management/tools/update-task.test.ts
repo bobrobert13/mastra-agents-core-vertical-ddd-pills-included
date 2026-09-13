@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { updateTaskTool } from '../../../../../src/mastra/domains/task-management/tools/update-task';
 import { runTool } from '../../../../../src/mastra/shared/tools/run-tool';
 import { getAppDb, resetAppDb } from '../../../../../src/mastra/shared/config/db';
-import { createTaskRepository, type TaskRepository } from '../../../../../src/mastra/domains/task-management/repo';
+import {
+  createTaskRepository,
+  type TaskRepository,
+} from '../../../../../src/mastra/domains/task-management/repo';
 import { eventBus } from '../../../../../src/mastra/shared/events';
 import type {
   TaskUpdatedEvent,
@@ -51,13 +54,17 @@ describe('UpdateTaskTool (guarded real writes)', () => {
     updatedEvents = [];
     completedEvents = [];
     unsubs = [
-      eventBus.subscribe<TaskUpdatedEvent>('task.updated', (e) => { updatedEvents.push(e); }),
-      eventBus.subscribe<TaskCompletedEvent>('task.completed', (e) => { completedEvents.push(e); }),
+      eventBus.subscribe<TaskUpdatedEvent>('task.updated', e => {
+        updatedEvents.push(e);
+      }),
+      eventBus.subscribe<TaskCompletedEvent>('task.completed', e => {
+        completedEvents.push(e);
+      }),
     ];
   });
 
   afterEach(() => {
-    unsubs.forEach((u) => u());
+    unsubs.forEach(u => u());
   });
 
   it('updates the persisted row, bumps the version and publishes task.updated', async () => {

@@ -38,14 +38,15 @@ export async function collectOpenTasks(
 }
 
 /** Step 2 core (pure): markdown digest over the collected rows. */
-export function buildDigest(window: DigestWindow, open: Task[]): {
+export function buildDigest(
+  window: DigestWindow,
+  open: Task[]
+): {
   date: string;
   openCount: number;
   lines: string[];
 } {
-  const lines: string[] = [
-    `## Daily digest — ${window.date} (resource ${window.resourceId})`,
-  ];
+  const lines: string[] = [`## Daily digest — ${window.date} (resource ${window.resourceId})`];
   if (open.length === 0) {
     lines.push('_No open tasks._');
   } else {
@@ -96,7 +97,7 @@ export const collectOpenTasksStep = createStep({
     return {
       date: window.date,
       resourceId: window.resourceId,
-      open: open.map((t) => ({
+      open: open.map(t => ({
         id: t.id,
         title: t.title,
         status: t.status,
@@ -129,7 +130,7 @@ export const buildDigestStep = createStep({
     lines: z.array(z.string()),
   }),
   execute: async ({ inputData }) => {
-    const open: Task[] = inputData.open.map((t) => ({
+    const open: Task[] = inputData.open.map(t => ({
       id: t.id,
       title: t.title,
       status: t.status as Task['status'],

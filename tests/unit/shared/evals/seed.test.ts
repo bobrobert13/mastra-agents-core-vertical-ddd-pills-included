@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
-import { EVAL_STORAGE_RETENTION, resolveEvalStorageUrl, EVAL_CI_DB_URL } from '../../../../src/mastra/shared/evals/eval-storage';
-import { EVAL_SEED_SPECS, seedEvalDatasets, seedDatasetPath } from '../../../../src/mastra/shared/evals/seed';
-import { checkBaselineRegression, MAX_BASELINE_DELTA } from '../../../../src/mastra/shared/evals/baseline-check';
+import {
+  EVAL_STORAGE_RETENTION,
+  resolveEvalStorageUrl,
+  EVAL_CI_DB_URL,
+} from '../../../../src/mastra/shared/evals/eval-storage';
+import {
+  EVAL_SEED_SPECS,
+  seedEvalDatasets,
+  seedDatasetPath,
+} from '../../../../src/mastra/shared/evals/seed';
+import {
+  checkBaselineRegression,
+  MAX_BASELINE_DELTA,
+} from '../../../../src/mastra/shared/evals/baseline-check';
 import { readFileSync } from 'node:fs';
 import { createEvalMastra } from '../../../evals/eval-instance';
 import researchJson from '../../../evals/datasets/research-dataset.json';
@@ -46,7 +57,10 @@ describe('seed specs ↔ canonical JSON', () => {
     for (const spec of EVAL_SEED_SPECS) {
       const items = JSON.parse(readFileSync(seedDatasetPath(spec.file), 'utf8')).items;
       for (const item of items) {
-        expect(spec.inputSchema.safeParse(item.input).success, `${spec.datasetId}/${item.id} input`).toBe(true);
+        expect(
+          spec.inputSchema.safeParse(item.input).success,
+          `${spec.datasetId}/${item.id} input`
+        ).toBe(true);
         expect(
           spec.groundTruthSchema.safeParse(item.groundTruth).success,
           `${spec.datasetId}/${item.id} groundTruth`

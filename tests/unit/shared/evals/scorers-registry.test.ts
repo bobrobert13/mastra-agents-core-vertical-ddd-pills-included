@@ -50,12 +50,11 @@ describe('scorers-registry — §3.2 registration surface', () => {
   });
 
   it('offline tier = the zero-LLM set moved out of the judge tier by §3.2 (completeness, tone, keyword-coverage, research-relevance)', () => {
-    expect(offlineScorerEntries().map(e => e.id).sort()).toEqual([
-      'completeness-scorer',
-      'keyword-coverage',
-      'research-relevance',
-      'tone-scorer',
-    ]);
+    expect(
+      offlineScorerEntries()
+        .map(e => e.id)
+        .sort()
+    ).toEqual(['completeness-scorer', 'keyword-coverage', 'research-relevance', 'tone-scorer']);
   });
 
   it('hallucination/bias thresholds use the `max` form (high score IS bad)', () => {
@@ -63,14 +62,19 @@ describe('scorers-registry — §3.2 registration surface', () => {
     expect(research.find(s => s.id === 'hallucination')?.threshold).toEqual({ max: 0.3 });
     const comms = AGENT_SCORER_MATRIX['communication-agent'];
     expect(comms.find(s => s.id === 'bias')?.threshold).toEqual({ max: 0.3 });
-    expect(AGENT_SCORER_MATRIX['file-operations-agent'].find(s => s.id === 'hallucination')?.threshold).toEqual({
+    expect(
+      AGENT_SCORER_MATRIX['file-operations-agent'].find(s => s.id === 'hallucination')?.threshold
+    ).toEqual({
       max: 0.2,
     });
   });
 
   it('all four agents have ≥1 offline gateable scorer (Tier A coverage per agent)', () => {
     for (const [agentId, list] of Object.entries(AGENT_SCORER_MATRIX)) {
-      expect(list.some(s => s.tier === 'offline'), agentId).toBe(true);
+      expect(
+        list.some(s => s.tier === 'offline'),
+        agentId
+      ).toBe(true);
     }
   });
 

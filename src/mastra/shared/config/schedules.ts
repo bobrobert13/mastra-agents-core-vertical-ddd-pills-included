@@ -18,18 +18,17 @@ export function detectSchedules(services: ServiceRegistry, mastra: Mastra): void
   const workersDisabled = (process.env.MASTRA_WORKERS ?? '').trim().toLowerCase() === 'false';
 
   const configs = Object.entries(mastra.listWorkflows()).flatMap(([workflowId, workflow]) => {
-    const getter = (
-      workflow as { getScheduleConfigs?: () => ScheduleLike[] }
-    ).getScheduleConfigs;
+    const getter = (workflow as { getScheduleConfigs?: () => ScheduleLike[] }).getScheduleConfigs;
     if (typeof getter !== 'function') return [];
-    return getter
-      .call(workflow)
-      .map(config => ({
-        workflowId,
-        cron: config.cron ?? '?',
-        timezone: config.timezone ?? 'local',
-        row: config.id && config.id !== workflowId ? `wf_${workflowId}__${config.id}` : `wf_${workflowId}`,
-      }));
+    return getter.call(workflow).map(config => ({
+      workflowId,
+      cron: config.cron ?? '?',
+      timezone: config.timezone ?? 'local',
+      row:
+        config.id && config.id !== workflowId
+          ? `wf_${workflowId}__${config.id}`
+          : `wf_${workflowId}`,
+    }));
   });
 
   if (configs.length === 0) {

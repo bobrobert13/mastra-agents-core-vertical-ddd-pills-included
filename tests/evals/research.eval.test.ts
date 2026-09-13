@@ -54,7 +54,9 @@ describe('research dataset — seeded into native storage (offline)', () => {
     const dataset = await mastra.datasets.get({ id: 'research-qa' });
     const listed = await dataset.listItems({ page: 0, perPage: 1000 });
     const items = Array.isArray(listed) ? listed : listed.items;
-    expect(items.map(i => i.externalId).sort()).toEqual(researchDataset.items.map(i => i.id).sort());
+    expect(items.map(i => i.externalId).sort()).toEqual(
+      researchDataset.items.map(i => i.id).sort()
+    );
   });
 
   it('dataset record carries the §3.1 target + scorer registrations', async () => {

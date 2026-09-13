@@ -63,7 +63,13 @@ describe('computeSignature / verifySignature (golden vectors)', () => {
     expect(verifySignature(BODY, undefined, SECRET)).toBe(false);
     expect(verifySignature(BODY, '', SECRET)).toBe(false);
     expect(verifySignature(BODY, 'not-a-signature', SECRET)).toBe(false); // wrong shape (length guard)
-    expect(verifySignature(BODY, 'sha256=zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz', SECRET)).toBe(false);
+    expect(
+      verifySignature(
+        BODY,
+        'sha256=zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz',
+        SECRET
+      )
+    ).toBe(false);
     expect(verifySignature(BODY, GOLDEN.slice(0, -1), SECRET)).toBe(false); // truncated hex
     expect(verifySignature(BODY, GOLDEN + 'aa', SECRET)).toBe(false); // extended hex
   });

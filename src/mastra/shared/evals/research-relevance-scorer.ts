@@ -52,15 +52,18 @@ function extractText(run: { input?: unknown; output?: unknown }): string {
         typeof m === 'string'
           ? m
           : String(
-              (m as { content?: { parts?: Array<{ type: string; text?: string }> } })?.content
-                ?.parts?.filter(p => p.type === 'text')
+              (
+                m as { content?: { parts?: Array<{ type: string; text?: string }> } }
+              )?.content?.parts
+                ?.filter(p => p.type === 'text')
                 .map(p => p.text ?? '')
                 .join(' ') ?? ''
             )
       )
       .join(' ');
   }
-  if (out && typeof out === 'object' && 'text' in out) return String((out as { text: unknown }).text);
+  if (out && typeof out === 'object' && 'text' in out)
+    return String((out as { text: unknown }).text);
   return '';
 }
 

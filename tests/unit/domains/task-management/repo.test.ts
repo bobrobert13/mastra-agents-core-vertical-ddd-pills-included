@@ -78,22 +78,22 @@ describe('task repository (LibSQL :memory:)', () => {
     await repo.createTask({ title: `${marker} b2`, resourceId: 'beta', priority: 'high' });
     await repo.createTask({ title: `${marker} done`, resourceId: 'beta' });
     await repo.updateTask(
-      (await repo.listTasks({ resourceId: 'beta', limit: 100 })).find((t) =>
+      (await repo.listTasks({ resourceId: 'beta', limit: 100 })).find(t =>
         t.title.endsWith('done')
       )!.id,
       { status: 'completed' }
     );
 
     const alpha = await repo.listTasks({ resourceId: 'alpha' });
-    expect(alpha.every((t) => t.resourceId === 'alpha')).toBe(true);
-    expect(alpha.some((t) => t.title.startsWith(marker))).toBe(true);
+    expect(alpha.every(t => t.resourceId === 'alpha')).toBe(true);
+    expect(alpha.some(t => t.title.startsWith(marker))).toBe(true);
 
     const betaOpen = await repo.listTasks({ resourceId: 'beta', excludeStatus: 'completed' });
     expect(betaOpen).toHaveLength(2);
-    expect(betaOpen.every((t) => t.status !== 'completed')).toBe(true);
+    expect(betaOpen.every(t => t.status !== 'completed')).toBe(true);
 
     const betaHigh = await repo.listTasks({ resourceId: 'beta', status: 'pending' });
-    expect(betaHigh.every((t) => t.resourceId === 'beta')).toBe(true);
+    expect(betaHigh.every(t => t.resourceId === 'beta')).toBe(true);
 
     const limited = await repo.listTasks({ resourceId: 'beta', limit: 1 });
     expect(limited).toHaveLength(1);
@@ -101,17 +101,17 @@ describe('task repository (LibSQL :memory:)', () => {
     expect((await repo.listTasks({ limit: 500 })).length).toBeLessThanOrEqual(100);
 
     const excluded = await repo.listTasks({ excludeStatus: 'completed', limit: 100 });
-    expect(excluded.find((t) => t.id === beta1.id)).toBeDefined();
-    expect(excluded.every((t) => t.status !== 'completed')).toBe(true);
+    expect(excluded.find(t => t.id === beta1.id)).toBeDefined();
+    expect(excluded.every(t => t.status !== 'completed')).toBe(true);
   });
 
   it('status/exact filter combined with excludeStatus is honored', async () => {
     const t = await repo.createTask({ title: 'exact filter me' });
     await repo.updateTask(t.id, { status: 'in-progress' });
     const inProg = await repo.listTasks({ status: 'in-progress', excludeStatus: 'completed' });
-    expect(inProg.some((x) => x.id === t.id)).toBe(true);
+    expect(inProg.some(x => x.id === t.id)).toBe(true);
     const pendingOnly = await repo.listTasks({ status: 'pending', excludeStatus: 'in-progress' });
-    expect(pendingOnly.some((x) => x.id === t.id)).toBe(false);
+    expect(pendingOnly.some(x => x.id === t.id)).toBe(false);
   });
 
   it('updateTask mutates the row, bumps version and updated_at', async () => {
@@ -180,7 +180,7 @@ describe('task repository durability (file: reopen after close)', () => {
     expect(read).not.toBeNull();
     expect(read?.title).toBe('survives restart');
     expect(read?.priority).toBe('high');
-    expect((await repo2.listTasks({})).some((t) => t.id === created.id)).toBe(true);
+    expect((await repo2.listTasks({})).some(t => t.id === created.id)).toBe(true);
     await db2.close();
 
     rmSync(dir, { recursive: true, force: true });

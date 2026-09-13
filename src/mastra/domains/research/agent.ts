@@ -75,7 +75,9 @@ External (MCP) tools available to you may only be used for this agent's research
     return {
       ...base,
       ...mcp,
-      ...('search_knowledge' in registered ? { search_knowledge: registered.search_knowledge } : {}),
+      ...('search_knowledge' in registered
+        ? { search_knowledge: registered.search_knowledge }
+        : {}),
     };
   },
 });

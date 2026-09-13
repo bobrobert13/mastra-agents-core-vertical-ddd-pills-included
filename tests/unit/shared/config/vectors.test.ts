@@ -29,11 +29,9 @@ async function freshVectors() {
 }
 
 /** service-status.ts:14 render rule — spacing derived, never hand-typed. */
-const render = (s: ServiceStatus) =>
-  `${s.active ? '✅' : '○'} ${s.name.padEnd(16)} ${s.detail}`;
+const render = (s: ServiceStatus) => `${s.active ? '✅' : '○'} ${s.name.padEnd(16)} ${s.detail}`;
 const canonical = (s: ServiceStatus) => `${s.name}: ${s.detail}`;
-const byName = (services: ServiceStatus[], name: string) =>
-  services.find(s => s.name === name);
+const byName = (services: ServiceStatus[], name: string) => services.find(s => s.name === name);
 
 beforeEach(cleanEnv);
 
@@ -55,9 +53,7 @@ describe('buildVectors — store resolution mirrors storage.ts', () => {
       true,
       'PgVector (DATABASE_URL) — hnsw/dotproduct',
     ]);
-    expect(render(store)).toBe(
-      '✅ Vector store     PgVector (DATABASE_URL) — hnsw/dotproduct'
-    );
+    expect(render(store)).toBe('✅ Vector store     PgVector (DATABASE_URL) — hnsw/dotproduct');
   });
 
   it('zero-config → LibSQLVector on the storage URL (Scenario 1 config half)', async () => {
@@ -72,9 +68,7 @@ describe('buildVectors — store resolution mirrors storage.ts', () => {
     expect(res.store!.id).toBe(VECTOR_STORE_NAME);
     const store = byName(services, 'Vector store')!;
     expect(store.detail).toBe('LibSQLVector (file:./mastra.db — cosine)');
-    expect(render(store)).toBe(
-      '✅ Vector store     LibSQLVector (file:./mastra.db — cosine)'
-    );
+    expect(render(store)).toBe('✅ Vector store     LibSQLVector (file:./mastra.db — cosine)');
   });
 
   it('LIBSQL_URL custom location is honored by the vector store too', async () => {
@@ -185,15 +179,24 @@ describe('buildDomainMemory — §3.3 factory (identity vs availability fix)', (
     expect(v.semanticRecallAvailable()).toBe(false); // production-path observable
 
     const stub = createHashingEmbedder(1024);
-    const memory = await v.buildDomainMemory({ generateTitle: true }, {
-      embedder: stub.model,
-      vector: new LibSQLVector({ id: 't', url: 'file::memory:' }),
-    })({ requestContext: {} as never });
+    const memory = await v.buildDomainMemory(
+      { generateTitle: true },
+      {
+        embedder: stub.model,
+        vector: new LibSQLVector({ id: 't', url: 'file::memory:' }),
+      }
+    )({ requestContext: {} as never });
 
     memory.setStorage(new LibSQLStore({ id: 't', url: 'file::memory:' }));
     await memory.saveMessages({
       messages: [
-        { id: 'm1', role: 'user', content: { format: 2, parts: [{ type: 'text', text: 'hello' }] }, threadId: 'th', resourceId: 'r' },
+        {
+          id: 'm1',
+          role: 'user',
+          content: { format: 2, parts: [{ type: 'text', text: 'hello' }] },
+          threadId: 'th',
+          resourceId: 'r',
+        },
       ] as never,
     });
 
@@ -208,15 +211,24 @@ describe('buildDomainMemory — §3.3 factory (identity vs availability fix)', (
 
     const stub = createHashingEmbedder(64);
     const vector = new LibSQLVector({ id: 't', url: 'file::memory:' });
-    const memory = await v.buildDomainMemory({ generateTitle: true }, {
-      embedder: stub.model,
-      vector,
-    })({ requestContext: {} as never });
+    const memory = await v.buildDomainMemory(
+      { generateTitle: true },
+      {
+        embedder: stub.model,
+        vector,
+      }
+    )({ requestContext: {} as never });
 
     memory.setStorage(new LibSQLStore({ id: 't', url: 'file::memory:' }));
     await memory.saveMessages({
       messages: [
-        { id: 'm1', role: 'user', content: { format: 2, parts: [{ type: 'text', text: 'hello there' }] }, threadId: 'th', resourceId: 'r' },
+        {
+          id: 'm1',
+          role: 'user',
+          content: { format: 2, parts: [{ type: 'text', text: 'hello there' }] },
+          threadId: 'th',
+          resourceId: 'r',
+        },
       ] as never,
     });
 
@@ -234,9 +246,10 @@ describe('buildDomainMemory — §3.3 factory (identity vs availability fix)', (
     const fakeMastra = { listVectors: () => ({ [v.VECTOR_STORE_NAME]: registryVector }) };
     const stub = createHashingEmbedder(64);
 
-    const memory = await v.buildDomainMemory({ generateTitle: true }, { embedder: stub.model })(
-      { requestContext: {} as never, mastra: fakeMastra as never }
-    );
+    const memory = await v.buildDomainMemory(
+      { generateTitle: true },
+      { embedder: stub.model }
+    )({ requestContext: {} as never, mastra: fakeMastra as never });
     // Wires without touching the throwing getVector(); registry entry used.
     expect(memory).toBeDefined();
     expect((memory as unknown as { vector?: unknown }).vector).toBe(registryVector);
@@ -245,9 +258,10 @@ describe('buildDomainMemory — §3.3 factory (identity vs availability fix)', (
   it('absent registry key (fully-off / ctor skipped null) → no crash, recall off', async () => {
     process.env.SEMANTIC_RECALL = 'off';
     const v = await freshVectors();
-    const memory = await v.buildDomainMemory({ generateTitle: true })(
-      { requestContext: {} as never, mastra: { listVectors: () => undefined } as never }
-    );
+    const memory = await v.buildDomainMemory({ generateTitle: true })({
+      requestContext: {} as never,
+      mastra: { listVectors: () => undefined } as never,
+    });
     expect(memory).toBeDefined();
   });
 });

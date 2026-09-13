@@ -6,7 +6,15 @@
  * via realpath, FILE_JAIL=off escape hatch).
  */
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, existsSync, symlinkSync } from 'node:fs';
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  writeFileSync,
+  readFileSync,
+  existsSync,
+  symlinkSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { writeFileTool } from '../../../../../src/mastra/domains/file-operations/tools/write-file';
@@ -61,9 +69,9 @@ describe('writeFileTool — jail (spec 06 §3.6)', () => {
   });
 
   it('rejects ../ traversal with a tool-level error BEFORE any fs write', async () => {
-    await expect(
-      runTool(writeFileTool, { path: '../escape.txt', content: 'pwn' })
-    ).rejects.toThrow(/Path escapes the workspace jail/);
+    await expect(runTool(writeFileTool, { path: '../escape.txt', content: 'pwn' })).rejects.toThrow(
+      /Path escapes the workspace jail/
+    );
     expect(existsSync(join(base, 'escape.txt'))).toBe(false); // empty-write guarantee
   });
 
@@ -89,9 +97,9 @@ describe('writeFileTool — jail (spec 06 §3.6)', () => {
     const victim = join(outside, 'victim.txt');
     writeFileSync(victim, 'original');
     symlinkSync(victim, join(root, 'notes.txt'), 'file');
-    await expect(runTool(writeFileTool, { path: 'notes.txt', content: 'clobbered' })).rejects.toThrow(
-      /escapes the workspace jail/
-    );
+    await expect(
+      runTool(writeFileTool, { path: 'notes.txt', content: 'clobbered' })
+    ).rejects.toThrow(/escapes the workspace jail/);
     expect(readFileSync(victim, 'utf-8')).toBe('original');
   });
 

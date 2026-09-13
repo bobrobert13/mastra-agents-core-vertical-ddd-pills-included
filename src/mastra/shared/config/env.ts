@@ -24,7 +24,7 @@ export class EnvValidationError extends Error {
       'Invalid environment configuration:\n' +
         issues.map(i => `  - ${i}`).join('\n') +
         '\n\nEvery variable in this project is OPTIONAL: unset (or blank) keeps the ' +
-        'matching service inactive and boots clean. Fix the values above or unset them.',
+        'matching service inactive and boots clean. Fix the values above or unset them.'
     );
     this.name = 'EnvValidationError';
   }
@@ -39,7 +39,10 @@ const checks: Array<{ key: string; schema: z.ZodType<string>; example: string }>
     schema: z
       .string()
       .regex(/^\d+$/, 'must be a plain integer TCP port between 1 and 65535')
-      .refine(v => Number(v) >= 1 && Number(v) <= 65535, 'must be a plain integer TCP port between 1 and 65535'),
+      .refine(
+        v => Number(v) >= 1 && Number(v) <= 65535,
+        'must be a plain integer TCP port between 1 and 65535'
+      ),
     example: 'MASTRA_PORT=4111',
   },
   {
@@ -78,7 +81,7 @@ const checks: Array<{ key: string; schema: z.ZodType<string>; example: string }>
       .string()
       .regex(
         /^(false|orchestration|scheduler|backgroundTasks)(\s*,\s*(orchestration|scheduler|backgroundTasks))*$/,
-        'must be false or a comma-separated list of orchestration|scheduler|backgroundTasks',
+        'must be false or a comma-separated list of orchestration|scheduler|backgroundTasks'
       ),
     example: 'MASTRA_WORKERS=scheduler (EXACTLY ONE process may run the scheduler)',
   },
@@ -86,7 +89,10 @@ const checks: Array<{ key: string; schema: z.ZodType<string>; example: string }>
     key: 'CORS_ORIGIN',
     schema: z
       .string()
-      .regex(/^\s*(\*|https?:\/\/[^\s,]+)(\s*,\s*(\*|https?:\/\/[^\s,]+))*\s*$/, `must be comma-separated origins ${HTTP_URLS}`),
+      .regex(
+        /^\s*(\*|https?:\/\/[^\s,]+)(\s*,\s*(\*|https?:\/\/[^\s,]+))*\s*$/,
+        `must be comma-separated origins ${HTTP_URLS}`
+      ),
     example: 'CORS_ORIGIN=https://app.example.com,https://admin.example.com',
   },
   {

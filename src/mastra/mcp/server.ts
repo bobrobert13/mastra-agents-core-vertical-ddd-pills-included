@@ -57,7 +57,9 @@ export function createReadonlyMcpServer(): MCPServer {
  * canonical "MCP server" banner line in BOTH branches. Returns
  * `{ mcpServer: undefined }` by default so `index.ts` can spread-gate.
  */
-export async function buildMcpServer(services?: ServiceRegistry): Promise<{ mcpServer?: MCPServer }> {
+export async function buildMcpServer(
+  services?: ServiceRegistry
+): Promise<{ mcpServer?: MCPServer }> {
   if (!isMcpServerEnabled()) {
     services?.push({ name: 'MCP server', active: false, detail: MCP_SERVER_DISABLED_DETAIL });
     return {};

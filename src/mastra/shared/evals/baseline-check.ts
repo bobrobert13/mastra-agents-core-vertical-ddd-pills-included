@@ -30,7 +30,13 @@ export interface EvalBaseline {
 
 const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '../../../../');
 
-export const BASELINE_PATH = path.join(REPO_ROOT, 'tests', 'evals', 'baseline', 'eval-baseline.json');
+export const BASELINE_PATH = path.join(
+  REPO_ROOT,
+  'tests',
+  'evals',
+  'baseline',
+  'eval-baseline.json'
+);
 
 export function loadBaseline(filePath = BASELINE_PATH): EvalBaseline {
   if (!existsSync(filePath)) {
@@ -41,7 +47,9 @@ export function loadBaseline(filePath = BASELINE_PATH): EvalBaseline {
   }
   const parsed = JSON.parse(readFileSync(filePath, 'utf8')) as EvalBaseline;
   if (parsed.schemaVersion !== 1 || typeof parsed.means !== 'object' || parsed.means === null) {
-    throw new Error(`EVAL BASELINE at ${filePath} has an unsupported shape (expected schemaVersion 1)`);
+    throw new Error(
+      `EVAL BASELINE at ${filePath} has an unsupported shape (expected schemaVersion 1)`
+    );
   }
   return parsed;
 }

@@ -39,7 +39,11 @@ function positiveInt(raw: string | undefined): number | undefined {
 export function readRateLimitConfig(env: NodeJS.ProcessEnv = process.env): RateLimitConfig {
   const windowMs = positiveInt(env.RATE_LIMIT_WINDOW_MS);
   const max = positiveInt(env.RATE_LIMIT_MAX_REQUESTS);
-  return { enabled: windowMs !== undefined && max !== undefined, windowMs: windowMs ?? 0, max: max ?? 0 };
+  return {
+    enabled: windowMs !== undefined && max !== undefined,
+    windowMs: windowMs ?? 0,
+    max: max ?? 0,
+  };
 }
 
 interface WindowState {

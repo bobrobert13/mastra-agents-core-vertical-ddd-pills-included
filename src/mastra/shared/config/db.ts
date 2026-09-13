@@ -29,7 +29,10 @@ export interface ExecuteResult {
 export interface AppDatabase {
   readonly dialect: DbDialect;
   /** SELECT — returns materialized rows. */
-  query<T = Record<string, unknown>>(sql: string, params?: readonly unknown[]): Promise<QueryResult<T>>;
+  query<T = Record<string, unknown>>(
+    sql: string,
+    params?: readonly unknown[]
+  ): Promise<QueryResult<T>>;
   /** INSERT / UPDATE / DELETE / DDL — returns the affected-row count. */
   execute(sql: string, params?: readonly unknown[]): Promise<ExecuteResult>;
   close(): Promise<void>;

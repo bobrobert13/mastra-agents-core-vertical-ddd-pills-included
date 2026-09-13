@@ -16,7 +16,11 @@ export function computeSignature(rawBody: string, secret: string): string {
  * = 72 bytes). The length check only rejects off-shape headers, so it leaks
  * nothing meaningful (spec 08 Phase 5 / Security).
  */
-export function verifySignature(rawBody: string, header: string | undefined, secret: string): boolean {
+export function verifySignature(
+  rawBody: string,
+  header: string | undefined,
+  secret: string
+): boolean {
   if (!header) return false;
   const expected = Buffer.from(computeSignature(rawBody, secret));
   const actual = Buffer.from(header);

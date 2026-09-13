@@ -34,7 +34,7 @@ afterEach(() => {
 describe.skipIf(!hasMcp)('MCPServer surface (spec 04 Scenario 4)', () => {
   it('canonical disabled banner detail is verbatim per §3.6', () => {
     expect(MCP_SERVER_DISABLED_DETAIL).toBe(
-      'disabled — set ENABLE_MCP_SERVER=true (read-only surface; requires Spec 01 auth outside localhost)',
+      'disabled — set ENABLE_MCP_SERVER=true (read-only surface; requires Spec 01 auth outside localhost)'
     );
   });
 
@@ -76,7 +76,11 @@ describe.skipIf(!hasMcp)('MCPServer surface (spec 04 Scenario 4)', () => {
   });
 
   it('exposed surface contains ZERO mutating primitives (static list, §5)', () => {
-    expect([...EXPOSED_AGENT_KEYS, ...EXPOSED_TOOL_KEYS].some(k => defaultMcpApprovalPolicy({ toolName: k }))).toBe(false);
+    expect(
+      [...EXPOSED_AGENT_KEYS, ...EXPOSED_TOOL_KEYS].some(k =>
+        defaultMcpApprovalPolicy({ toolName: k })
+      )
+    ).toBe(false);
     // derived ask_* tool names from the exposed agents are also non-mutating
     for (const key of EXPOSED_AGENT_KEYS) {
       expect(defaultMcpApprovalPolicy({ toolName: `ask_${key}` })).toBe(false);

@@ -7,7 +7,10 @@ import {
   buildDigest,
 } from '../../../../../src/mastra/domains/task-management/workflows/daily-digest';
 import { getAppDb, resetAppDb } from '../../../../../src/mastra/shared/config/db';
-import { createTaskRepository, type TaskRepository } from '../../../../../src/mastra/domains/task-management/repo';
+import {
+  createTaskRepository,
+  type TaskRepository,
+} from '../../../../../src/mastra/domains/task-management/repo';
 import { eventBus } from '../../../../../src/mastra/shared/events';
 import type { Task } from '../../../../../src/mastra/domains/task-management/entities/task';
 import type { TasksDigestReadyEvent } from '../../../../../src/mastra/domains/task-management/events';
@@ -61,17 +64,19 @@ describe('daily-digest core (pure, :memory:)', () => {
     await repo.updateTask(b.id, { status: 'completed' });
 
     const { open } = await collectOpenTasks(repo, { date: '2026-09-13', resourceId: 'dg-1' });
-    expect(open.map((t) => t.title)).toEqual(['open-a']);
+    expect(open.map(t => t.title)).toEqual(['open-a']);
   });
 
   it('buildDigest renders markdown lines + counts', () => {
-    const digest = buildDigest(
-      { date: '2026-09-13', resourceId: 'dg-1' },
-      [
-        task({ id: '1', title: 'Alpha', priority: 'high', dueDate: new Date('2026-09-20T00:00:00.000Z') }),
-        task({ id: '2', title: 'Beta', status: 'in-progress' }),
-      ]
-    );
+    const digest = buildDigest({ date: '2026-09-13', resourceId: 'dg-1' }, [
+      task({
+        id: '1',
+        title: 'Alpha',
+        priority: 'high',
+        dueDate: new Date('2026-09-20T00:00:00.000Z'),
+      }),
+      task({ id: '2', title: 'Beta', status: 'in-progress' }),
+    ]);
     expect(digest.openCount).toBe(2);
     expect(digest.lines[0]).toBe('## Daily digest — 2026-09-13 (resource dg-1)');
     expect(digest.lines[1]).toBe('- [pending] Alpha (high) · due 2026-09-20');
@@ -90,25 +95,25 @@ describe('daily-digest core (pure, :memory:)', () => {
     await repo.updateTask(done.id, { status: 'completed' });
 
     const received: TasksDigestReadyEvent[] = [];
-    const unsub = eventBus.subscribe<TasksDigestReadyEvent>('tasks.digest.ready', (e) => {
+    const unsub = eventBus.subscribe<TasksDigestReadyEvent>('tasks.digest.ready', e => {
       received.push(e);
     });
 
     const step1 = collectOpenTasksStep as unknown as StepContextLike;
     const step2 = buildDigestStep as unknown as StepContextLike;
 
-    const out1 = await step1.execute({
+    const out1 = (await step1.execute({
       inputData: { resourceId: 'dg-chain', date: '2026-09-13' },
-    }) as { date: string; openCount?: number; open: unknown[] };
+    })) as { date: string; openCount?: number; open: unknown[] };
     expect(out1.open).toHaveLength(1);
 
-    const out2 = await step2.execute({ inputData: out1 }) as {
+    const out2 = (await step2.execute({ inputData: out1 })) as {
       date: string;
       openCount: number;
       lines: string[];
     };
     expect(out2.openCount).toBe(1);
-    expect(out2.lines.some((l) => l.includes('chain-me'))).toBe(true);
+    expect(out2.lines.some(l => l.includes('chain-me'))).toBe(true);
 
     expect(received).toHaveLength(1);
     expect(received[0].payload.resourceId).toBe('dg-chain');

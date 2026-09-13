@@ -7,7 +7,11 @@ import type { ExperimentSummary, ItemWithScores } from '@mastra/core/datasets';
 
 import { createEvalMastra } from '../eval-instance';
 import { seedEvalDatasets } from '../../../src/mastra/shared/evals/seed';
-import { BASELINE_PATH, writeBaseline, type EvalBaseline } from '../../../src/mastra/shared/evals/baseline-check';
+import {
+  BASELINE_PATH,
+  writeBaseline,
+  type EvalBaseline,
+} from '../../../src/mastra/shared/evals/baseline-check';
 import { hasProviderKey } from '../gates/_helpers';
 
 /**
@@ -89,7 +93,9 @@ function refreshArtifactsFromSummary(summary: ExperimentSummary, datasetVersion:
   }
   const tracked: Record<string, number> = {};
   for (const [scorerId, values] of Object.entries(means)) {
-    tracked[`research-agent::${scorerId}`] = +(values.reduce((a, b) => a + b, 0) / values.length).toFixed(6);
+    tracked[`research-agent::${scorerId}`] = +(
+      values.reduce((a, b) => a + b, 0) / values.length
+    ).toFixed(6);
   }
 
   if (Object.keys(tracked).length > 0) {
@@ -219,7 +225,9 @@ describe.skipIf(!LIVE_MODE)(`Tier B live experiments — phase: ${PHASE || '(non
     ];
     for (const item of report.items) {
       const b = item.results[prior.baselineExperimentId!]?.scores ?? {};
-      const c = prior.candidateExperimentId ? (item.results[prior.candidateExperimentId]?.scores ?? {}) : {};
+      const c = prior.candidateExperimentId
+        ? (item.results[prior.candidateExperimentId]?.scores ?? {})
+        : {};
       for (const scorerId of Object.keys({ ...b, ...c })) {
         const bv = b[scorerId];
         const cv = c[scorerId];

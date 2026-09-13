@@ -35,7 +35,8 @@ function stubMessageList(text: string) {
     getAllSystemMessages: () => [{ role: 'system' as const, content: 'tiny system' }],
     removeByIds: (ids: string[]) => {
       const drop = new Set(ids);
-      for (let i = messages.length - 1; i >= 0; i--) if (drop.has(messages[i].id)) messages.splice(i, 1);
+      for (let i = messages.length - 1; i >= 0; i--)
+        if (drop.has(messages[i].id)) messages.splice(i, 1);
     },
   };
 }

@@ -78,7 +78,10 @@ export function buildVectors(services: ServiceRegistry): VectorResolution {
       detail: 'PgVector (DATABASE_URL) — hnsw/dotproduct',
     });
     pushRecallBanner(services, resolution);
-    return { store: new PgVector({ id: VECTOR_STORE_NAME, connectionString: databaseUrl }), kind: 'pgvector' };
+    return {
+      store: new PgVector({ id: VECTOR_STORE_NAME, connectionString: databaseUrl }),
+      kind: 'pgvector',
+    };
   }
 
   // Same url buildStorage picked: LIBSQL_URL ?? 'file:./mastra.db'.
@@ -163,7 +166,9 @@ function guardEmbedder(model: MastraEmbeddingModel<string>): MastraEmbeddingMode
           if (!embedderAvailable) {
             // Latched already: short-circuit WITHOUT touching the (failing)
             // real embedder — zero retries, zero attempts.
-            throw new Error('Semantic recall disabled: embedder previously failed (offline/unavailable)');
+            throw new Error(
+              'Semantic recall disabled: embedder previously failed (offline/unavailable)'
+            );
           }
           try {
             const embed = target.doEmbed;
@@ -176,7 +181,9 @@ function guardEmbedder(model: MastraEmbeddingModel<string>): MastraEmbeddingMode
         };
       }
       const value = Reflect.get(receiver, prop);
-      return typeof value === 'function' ? (value as (...a: unknown[]) => unknown).bind(target) : value;
+      return typeof value === 'function'
+        ? (value as (...a: unknown[]) => unknown).bind(target)
+        : value;
     },
   }) as unknown as MastraEmbeddingModel<string>;
 }
@@ -202,7 +209,7 @@ export function buildDomainMemory(
     const available = semanticRecallAvailable();
     const embedder = deps?.embedder ?? resolveEmbedder().passage;
     const vector = available
-      ? deps?.vector ?? mastra?.listVectors?.()?.[VECTOR_STORE_NAME]
+      ? (deps?.vector ?? mastra?.listVectors?.()?.[VECTOR_STORE_NAME])
       : undefined;
 
     return new Memory({

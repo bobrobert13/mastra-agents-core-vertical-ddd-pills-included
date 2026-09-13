@@ -81,11 +81,24 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
   it('registers exactly the three root-level custom routes with the spec flags', () => {
     const { surface } = zeroConfigSurface();
     const byPath = new Map(surface.apiRoutes.map(r => [r.path, r]));
-    expect([...byPath.keys()].sort()).toEqual(['/health/version', '/hooks/:source', '/stream/:agentId']);
+    expect([...byPath.keys()].sort()).toEqual([
+      '/health/version',
+      '/hooks/:source',
+      '/stream/:agentId',
+    ]);
 
-    const webhook = byPath.get('/hooks/:source') as ApiRoute & { handler?: unknown; middleware?: unknown[] };
-    const health = byPath.get('/health/version') as ApiRoute & { handler?: unknown; middleware?: unknown[] };
-    const stream = byPath.get('/stream/:agentId') as ApiRoute & { handler?: unknown; middleware?: unknown[] };
+    const webhook = byPath.get('/hooks/:source') as ApiRoute & {
+      handler?: unknown;
+      middleware?: unknown[];
+    };
+    const health = byPath.get('/health/version') as ApiRoute & {
+      handler?: unknown;
+      middleware?: unknown[];
+    };
+    const stream = byPath.get('/stream/:agentId') as ApiRoute & {
+      handler?: unknown;
+      middleware?: unknown[];
+    };
     expect(webhook.method).toBe('POST');
     expect(health.method).toBe('GET');
     expect(stream.method).toBe('POST');
@@ -99,9 +112,9 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
 
   it('health handler answers the version shape with a minimal stub context', async () => {
     const { surface } = zeroConfigSurface();
-    const health = surface.apiRoutes.find(
-      r => r.path === '/health/version',
-    ) as unknown as { handler: (c: unknown) => Promise<unknown> };
+    const health = surface.apiRoutes.find(r => r.path === '/health/version') as unknown as {
+      handler: (c: unknown) => Promise<unknown>;
+    };
     const rc = new RequestContext();
     const stub = {
       get: (key: string) => (key === 'requestContext' ? rc : undefined),
@@ -118,7 +131,7 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
     const { surface } = zeroConfigSurface();
     const publishSpy = vi.spyOn(eventBus, 'publish');
     const webhook = surface.apiRoutes.find(
-      r => r.path === '/hooks/:source',
+      r => r.path === '/hooks/:source'
     ) as unknown as ApiRoute & { middleware?: unknown[] };
     const middlewares = (webhook.middleware ?? []) as Array<
       (c: unknown, next: () => Promise<void>) => Promise<unknown>
@@ -182,7 +195,7 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
     expect(activeServices.find(s => s.name === 'Webhook signing')?.active).toBe(true);
   });
 
-  it('buildObservability with OTLP unset keeps today\'s exporter set byte-stable (Scenario 5)', () => {
+  it("buildObservability with OTLP unset keeps today's exporter set byte-stable (Scenario 5)", () => {
     vi.stubEnv('OTEL_EXPORTER_OTLP_ENDPOINT', '');
     vi.stubEnv('ENABLE_OBSERVABILITY', '');
     const services: ServiceRegistry = [];

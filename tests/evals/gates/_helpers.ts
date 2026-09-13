@@ -13,7 +13,10 @@ import {
   buildEvalScorerEntries,
   type ScorerTier,
 } from '../../../src/mastra/shared/evals/scorers-registry';
-import type { GateScorerEntry, ThresholdConfig } from '../../../src/mastra/shared/evals/gate-runner';
+import type {
+  GateScorerEntry,
+  ThresholdConfig,
+} from '../../../src/mastra/shared/evals/gate-runner';
 
 /** Provider-key detector — same hard rule as the integration/live tiers. */
 export function hasProviderKey(): boolean {

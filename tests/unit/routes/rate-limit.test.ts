@@ -29,10 +29,18 @@ describe('readRateLimitConfig', () => {
     expect(readRateLimitConfig({})).toEqual({ enabled: false, windowMs: 0, max: 0 });
     expect(readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '1000' }).enabled).toBe(false);
     expect(readRateLimitConfig({ RATE_LIMIT_MAX_REQUESTS: '5' }).enabled).toBe(false);
-    expect(readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '0', RATE_LIMIT_MAX_REQUESTS: '5' }).enabled).toBe(false);
-    expect(readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '-5', RATE_LIMIT_MAX_REQUESTS: '5' }).enabled).toBe(false);
-    expect(readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: 'abc', RATE_LIMIT_MAX_REQUESTS: '5' }).enabled).toBe(false);
-    expect(readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '60000', RATE_LIMIT_MAX_REQUESTS: '100' })).toEqual({
+    expect(
+      readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '0', RATE_LIMIT_MAX_REQUESTS: '5' }).enabled
+    ).toBe(false);
+    expect(
+      readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '-5', RATE_LIMIT_MAX_REQUESTS: '5' }).enabled
+    ).toBe(false);
+    expect(
+      readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: 'abc', RATE_LIMIT_MAX_REQUESTS: '5' }).enabled
+    ).toBe(false);
+    expect(
+      readRateLimitConfig({ RATE_LIMIT_WINDOW_MS: '60000', RATE_LIMIT_MAX_REQUESTS: '100' })
+    ).toEqual({
       enabled: true,
       windowMs: 60000,
       max: 100,

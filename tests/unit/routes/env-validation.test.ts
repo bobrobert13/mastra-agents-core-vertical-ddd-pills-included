@@ -18,7 +18,7 @@ describe('validateEnv — fail-fast ONLY on malformed present values', () => {
 
   it('blank/whitespace values count as unset (repo-wide convention)', () => {
     expect(() =>
-      validateEnv({ MASTRA_PORT: '', LOG_LEVEL: '   ', CORS_ORIGIN: '', RATE_LIMIT_WINDOW_MS: ' ' }),
+      validateEnv({ MASTRA_PORT: '', LOG_LEVEL: '   ', CORS_ORIGIN: '', RATE_LIMIT_WINDOW_MS: ' ' })
     ).not.toThrow();
   });
 

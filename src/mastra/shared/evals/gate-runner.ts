@@ -99,10 +99,13 @@ const REPO_ROOT = path.resolve(fileURLToPath(new URL('.', import.meta.url)), '..
 /** Load `tests/evals/fixtures/<file>.json` (recorded outputs). */
 export function loadGateFixtures(file: string): GateFixtures {
   const p = path.join(REPO_ROOT, 'tests', 'evals', 'fixtures', file);
-  if (!existsSync(p)) throw new Error(`EVAL FIXTURE MISSING at ${p} — Tier A gates run on recorded fixtures`);
+  if (!existsSync(p))
+    throw new Error(`EVAL FIXTURE MISSING at ${p} — Tier A gates run on recorded fixtures`);
   const parsed = JSON.parse(readFileSync(p, 'utf8')) as GateFixtures;
   if (!parsed.agentId || !Array.isArray(parsed.items) || parsed.items.length === 0) {
-    throw new Error(`EVAL FIXTURE ${p} has an unsupported shape (need agentId + non-empty items[])`);
+    throw new Error(
+      `EVAL FIXTURE ${p} has an unsupported shape (need agentId + non-empty items[])`
+    );
   }
   return parsed;
 }
@@ -146,7 +149,7 @@ export async function runFixtureGate(opts: {
   const baseline =
     opts.baseline === undefined && opts.baselinePath === undefined
       ? loadBaseline()
-      : opts.baseline ?? (opts.baselinePath ? loadBaseline(opts.baselinePath) : null);
+      : (opts.baseline ?? (opts.baselinePath ? loadBaseline(opts.baselinePath) : null));
 
   const perItem: PerItemScore[] = [];
   const errors: string[] = [];
@@ -164,7 +167,9 @@ export async function runFixtureGate(opts: {
         }
         perItem.push({ itemId: item.itemId, scorerKey: key, score, reason: result.reason });
       } catch (error) {
-        errors.push(`${key}/${item.itemId}: ${error instanceof Error ? error.message : String(error)}`);
+        errors.push(
+          `${key}/${item.itemId}: ${error instanceof Error ? error.message : String(error)}`
+        );
       }
     }
   }
@@ -203,7 +208,15 @@ export async function runFixtureGate(opts: {
   if (errors.length > 0 || baselineViolations.length > 0) verdict = 'failed';
   else if (thresholdMisses.length > 0) verdict = 'scored'; // threshold miss = red per D4
 
-  return { agentId: fixtures.agentId, verdict, means, perItem, errors, thresholdMisses, baselineViolations };
+  return {
+    agentId: fixtures.agentId,
+    verdict,
+    means,
+    perItem,
+    errors,
+    thresholdMisses,
+    baselineViolations,
+  };
 }
 
 /** D4 contract: `'scored'` (threshold miss) is red too, never advisory. */
@@ -214,7 +227,9 @@ export function assertGateReport(report: GateReport): void {
     ...report.thresholdMisses.map(t => `threshold: ${t}`),
     ...report.baselineViolations.map(v => `baseline Δ: ${formatBaselineViolations([v])}`),
   ];
-  throw new Error(`EVAL GATE ${report.verdict} [${report.agentId}] — ${parts.join(' | ') || 'no detail'}`);
+  throw new Error(
+    `EVAL GATE ${report.verdict} [${report.agentId}] — ${parts.join(' | ') || 'no detail'}`
+  );
 }
 
 /**

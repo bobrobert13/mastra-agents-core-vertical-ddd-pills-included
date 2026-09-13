@@ -32,11 +32,7 @@ function createFakePubsub() {
   return { fake: fake as unknown as PubSub, published, subs };
 }
 
-const delivery = (
-  origin: string,
-  domainType: unknown,
-  payload: unknown = {}
-) => ({
+const delivery = (origin: string, domainType: unknown, payload: unknown = {}) => ({
   id: 'evt-1',
   type: 'domain.event',
   runId: origin,
@@ -58,7 +54,9 @@ describe('event-bus bridge (fake PubSub, deterministic, no Redis)', () => {
   it('attach without pubsub is a no-op (zero-config stays in-process)', async () => {
     attachEventBusBridge(undefined);
     const local: unknown[] = [];
-    eventBus.subscribe('a.type', e => { local.push(e); });
+    eventBus.subscribe('a.type', e => {
+      local.push(e);
+    });
 
     await eventBus.publish({ type: 'a.type', payload: { x: 1 } });
 
@@ -91,7 +89,9 @@ describe('event-bus bridge (fake PubSub, deterministic, no Redis)', () => {
     const { fake, subs } = createFakePubsub();
     attachEventBusBridge(fake);
     const inbound: unknown[] = [];
-    eventBus.subscribe('task.created', e => { inbound.push(e); });
+    eventBus.subscribe('task.created', e => {
+      inbound.push(e);
+    });
 
     const ack = vi.fn(async () => {});
     subs[0].cb(delivery('other-process-1', 'task.created', { t: 1 }), ack);
@@ -124,9 +124,22 @@ describe('event-bus bridge (fake PubSub, deterministic, no Redis)', () => {
     const ack1 = vi.fn(async () => {});
     const ack2 = vi.fn(async () => {});
     const ack3 = vi.fn(async () => {});
-    expect(() => subs[0].cb({ id: 'x', type: 'domain.event', runId: 'r', createdAt: new Date() }, ack1)).not.toThrow();
+    expect(() =>
+      subs[0].cb({ id: 'x', type: 'domain.event', runId: 'r', createdAt: new Date() }, ack1)
+    ).not.toThrow();
     expect(() => subs[0].cb(delivery('remote', undefined, {}), ack2)).not.toThrow();
-    expect(() => subs[0].cb({ id: 'y', type: 'domain.event', runId: 'r', createdAt: new Date(), data: { domainType: 123 } }, ack3)).not.toThrow();
+    expect(() =>
+      subs[0].cb(
+        {
+          id: 'y',
+          type: 'domain.event',
+          runId: 'r',
+          createdAt: new Date(),
+          data: { domainType: 123 },
+        },
+        ack3
+      )
+    ).not.toThrow();
 
     expect(spy).not.toHaveBeenCalled();
     expect(ack1).toHaveBeenCalledTimes(1);
@@ -136,7 +149,9 @@ describe('event-bus bridge (fake PubSub, deterministic, no Redis)', () => {
 
   it('publish/subscribe call-site API is unchanged (ADR-003 usage compiles untouched)', async () => {
     const local: unknown[] = [];
-    const unsub = eventBus.subscribe('legacy.event', e => { local.push(e); });
+    const unsub = eventBus.subscribe('legacy.event', e => {
+      local.push(e);
+    });
     await eventBus.publish({ type: 'legacy.event', payload: { ok: true } });
     unsub();
     await eventBus.publish({ type: 'legacy.event', payload: { ok: false } });

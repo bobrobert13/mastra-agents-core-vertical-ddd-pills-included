@@ -38,11 +38,14 @@ describe('editFileTool', () => {
   it('edits a file inside the jail and reports replacements', async () => {
     const file = join(root, 'data.txt');
     writeFileSync(file, 'alpha beta alpha');
-    const out = await runTool<{ path: string; replacements: number; edited: boolean }>(editFileTool, {
-      path: 'data.txt',
-      searchText: 'alpha',
-      replaceText: 'ALPHA',
-    });
+    const out = await runTool<{ path: string; replacements: number; edited: boolean }>(
+      editFileTool,
+      {
+        path: 'data.txt',
+        searchText: 'alpha',
+        replaceText: 'ALPHA',
+      }
+    );
     expect(out.replacements).toBe(2);
     expect(out.edited).toBe(true);
     expect(readFileSync(file, 'utf-8')).toBe('ALPHA beta ALPHA');
@@ -52,7 +55,11 @@ describe('editFileTool', () => {
     const victim = join(outside, 'victim.txt');
     writeFileSync(victim, 'keep me');
     await expect(
-      runTool(editFileTool, { path: '../outside/victim.txt', searchText: 'keep', replaceText: 'gone' })
+      runTool(editFileTool, {
+        path: '../outside/victim.txt',
+        searchText: 'keep',
+        replaceText: 'gone',
+      })
     ).rejects.toThrow(/Path escapes the workspace jail/);
     expect(readFileSync(victim, 'utf-8')).toBe('keep me');
   });

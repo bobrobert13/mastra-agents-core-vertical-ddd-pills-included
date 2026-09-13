@@ -119,14 +119,14 @@ export function resolveEmbedder(): EmbedderResolution {
   const id = embeddingModel();
   if (id) {
     if (!/^[A-Za-z0-9-]+\//.test(id)) {
-      logger.warn(`Invalid EMBEDDING_MODEL "${id}" — expected 'provider/model'; semantic recall disabled`);
+      logger.warn(
+        `Invalid EMBEDDING_MODEL "${id}" — expected 'provider/model'; semantic recall disabled`
+      );
       return noneResolution();
     }
 
     const provider = id.split('/')[0].toLowerCase();
-    const curated = EMBEDDING_MODELS.find(
-      m => m.id === id || `${m.provider}/${m.id}` === id
-    );
+    const curated = EMBEDDING_MODELS.find(m => m.id === id || `${m.provider}/${m.id}` === id);
     const keyEnv = PROVIDER_KEY_ENV[provider];
     if (keyEnv && !(env(keyEnv) ?? '')) {
       logger.warn(`EMBEDDING_MODEL=${id} needs ${keyEnv} — not set; semantic recall disabled`);

@@ -47,15 +47,17 @@ describe.skipIf(!url)('event-bus bridge over real Redis Streams', () => {
     });
 
     await waitFor(() =>
-      seen.some(
-        s => (s.data as { domainType?: string }).domainType === 'research.completed'
-      )
+      seen.some(s => (s.data as { domainType?: string }).domainType === 'research.completed')
     );
     const bridged = seen.find(
       s => (s.data as { domainType?: string }).domainType === 'research.completed'
     )!;
     expect(bridged.type).toBe('domain.event');
-    const data = bridged.data as { origin: string; domainType: string; payload: { finishedAt: unknown } };
+    const data = bridged.data as {
+      origin: string;
+      domainType: string;
+      payload: { finishedAt: unknown };
+    };
     expect(typeof data.origin).toBe('string');
     // Declared limitation: payload is JSON round-tripped — Date arrives as ISO string.
     expect(data.payload.finishedAt).toBe('1970-01-01T00:00:00.000Z');
@@ -63,7 +65,9 @@ describe.skipIf(!url)('event-bus bridge over real Redis Streams', () => {
 
   it('delivers an inbound remote event to local listeners with ack (at-least-once)', async () => {
     const received: unknown[] = [];
-    const unsub = eventBus.subscribe('task.assigned', e => { received.push(e); });
+    const unsub = eventBus.subscribe('task.assigned', e => {
+      received.push(e);
+    });
 
     await remote.publish(DOMAIN_EVENTS_TOPIC, {
       type: 'domain.event',

@@ -133,7 +133,9 @@ export function loadMcpToolsFor(agentKey: string): Promise<Record<string, Tool>>
   if (cached) return cached;
   const promise = doLoadMcpToolsFor(agentKey).catch(error => {
     toolsMemo.delete(agentKey); // never memoize a rejection
-    logger.warn(`[MCP] tool discovery failed for agent "${agentKey}": ${(error as Error)?.message ?? error}`);
+    logger.warn(
+      `[MCP] tool discovery failed for agent "${agentKey}": ${(error as Error)?.message ?? error}`
+    );
     return {};
   });
   toolsMemo.set(agentKey, promise);
@@ -154,7 +156,7 @@ async function doLoadMcpToolsFor(agentKey: string): Promise<Record<string, Tool>
   });
   for (const [server, message] of Object.entries(errors ?? {})) {
     logger.warn(
-      `[MCP] server "${server}" unavailable (${durations?.[server] ?? '?'}ms) — tools excluded, boot continues: ${message}`,
+      `[MCP] server "${server}" unavailable (${durations?.[server] ?? '?'}ms) — tools excluded, boot continues: ${message}`
     );
   }
 

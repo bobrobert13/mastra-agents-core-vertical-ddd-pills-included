@@ -112,10 +112,7 @@ function toTask(row: TaskRow): Task {
 
 export function createTaskRepository(db: AppDatabase): TaskRepository {
   /** `$n` for pg, `?` for libsql; called in param-append order. */
-  const ph =
-    db.dialect === 'pg'
-      ? (i: number): string => `$${i + 1}`
-      : (_i: number): string => '?';
+  const ph = db.dialect === 'pg' ? (i: number): string => `$${i + 1}` : (_i: number): string => '?';
 
   let ensured: Promise<void> | undefined;
 
@@ -144,10 +141,10 @@ export function createTaskRepository(db: AppDatabase): TaskRepository {
         'SELECT column_name FROM information_schema.columns WHERE table_name = $1',
         ['app_tasks']
       );
-      return new Set(rows.map((r) => r.column_name));
+      return new Set(rows.map(r => r.column_name));
     }
     const { rows } = await db.query<{ name: string }>('PRAGMA table_info(app_tasks)');
-    return new Set(rows.map((r) => r.name));
+    return new Set(rows.map(r => r.name));
   }
 
   async function selectOne(where: string[], params: unknown[], limit?: number): Promise<Task[]> {
@@ -210,10 +207,9 @@ VALUES (${params.map((_, i) => ph(i)).join(', ')})`;
         where.push(clause(params.length));
         params.push(value);
       };
-      if (filter.resourceId !== undefined) add((i) => `resource_id = ${ph(i)}`, filter.resourceId);
-      if (filter.status !== undefined) add((i) => `status = ${ph(i)}`, filter.status);
-      if (filter.excludeStatus !== undefined)
-        add((i) => `status <> ${ph(i)}`, filter.excludeStatus);
+      if (filter.resourceId !== undefined) add(i => `resource_id = ${ph(i)}`, filter.resourceId);
+      if (filter.status !== undefined) add(i => `status = ${ph(i)}`, filter.status);
+      if (filter.excludeStatus !== undefined) add(i => `status <> ${ph(i)}`, filter.excludeStatus);
       const limit = Math.min(Math.max(Math.floor(filter.limit ?? 20), 1), 100);
       return selectOne(where, params, limit);
     },

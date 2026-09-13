@@ -27,7 +27,16 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-type WfOk = { status: string; result?: { docId: string; indexName: string; dimension: number; chunkCount: number; skippedChunks: number } };
+type WfOk = {
+  status: string;
+  result?: {
+    docId: string;
+    indexName: string;
+    dimension: number;
+    chunkCount: number;
+    skippedChunks: number;
+  };
+};
 const wfOk = (r: unknown): WfOk['result'] => {
   const w = r as WfOk;
   expect(w.status).toBe('success');
@@ -77,11 +86,25 @@ describe('index-knowledge workflow (stub embedders, offline)', () => {
     const vector = makeVector();
     const workflow = createIndexKnowledgeWorkflow({ embedder: embedder.model, vector });
 
-    const first = await (await workflow.createRun()).start({
-      inputData: { source: 'inline', content: 'Alpha bravo charlie document text.', contentType: 'text', docId: 'doc-x' },
+    const first = await (
+      await workflow.createRun()
+    ).start({
+      inputData: {
+        source: 'inline',
+        content: 'Alpha bravo charlie document text.',
+        contentType: 'text',
+        docId: 'doc-x',
+      },
     });
-    const second = await (await workflow.createRun()).start({
-      inputData: { source: 'inline', content: 'Alpha bravo charlie document text.', contentType: 'text', docId: 'doc-x' },
+    const second = await (
+      await workflow.createRun()
+    ).start({
+      inputData: {
+        source: 'inline',
+        content: 'Alpha bravo charlie document text.',
+        contentType: 'text',
+        docId: 'doc-x',
+      },
     });
 
     wfOk(first);
@@ -121,7 +144,11 @@ describe('index-knowledge workflow (stub embedders, offline)', () => {
     const run = await workflow.createRun();
 
     const result = await run.start({
-      inputData: { source: 'inline', content: 'some text to embed for the failure path test', contentType: 'text' },
+      inputData: {
+        source: 'inline',
+        content: 'some text to embed for the failure path test',
+        contentType: 'text',
+      },
     });
 
     expect(result.status).toBe('failed');
@@ -133,8 +160,15 @@ describe('index-knowledge workflow (stub embedders, offline)', () => {
     const ok = createHashingEmbedder(1024);
     const vector = makeVector();
     const w1 = createIndexKnowledgeWorkflow({ embedder: ok.model, vector });
-    const r1 = await (await w1.createRun()).start({
-      inputData: { source: 'inline', content: 'original hundred and twenty four dimension document', contentType: 'text', docId: 'sticky' },
+    const r1 = await (
+      await w1.createRun()
+    ).start({
+      inputData: {
+        source: 'inline',
+        content: 'original hundred and twenty four dimension document',
+        contentType: 'text',
+        docId: 'sticky',
+      },
     });
     wfOk(r1);
     const countBefore = (await vector.describeIndex({ indexName: KNOWLEDGE_INDEX_NAME })).count;
@@ -142,8 +176,15 @@ describe('index-knowledge workflow (stub embedders, offline)', () => {
     // Now switch EMBEDDING_MODEL to a 1536d embedder via the seam.
     const bad = createFixedDimEmbedder(1536);
     const w2 = createIndexKnowledgeWorkflow({ embedder: bad, vector });
-    const r2 = await (await w2.createRun()).start({
-      inputData: { source: 'inline', content: 'a different document after the embedder switch', contentType: 'text', docId: 'switched' },
+    const r2 = await (
+      await w2.createRun()
+    ).start({
+      inputData: {
+        source: 'inline',
+        content: 'a different document after the embedder switch',
+        contentType: 'text',
+        docId: 'switched',
+      },
     });
 
     expect(r2.status).toBe('failed');

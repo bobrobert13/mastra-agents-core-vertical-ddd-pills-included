@@ -96,7 +96,9 @@ export function sharedResponseCache(): InMemoryServerCache {
 }
 
 /** Slot 2 factory — exported for the web-fetch scanning hook (§3.4 Q3) + tests. */
-export function createInjectionDetector(mode: SecurityMode = securityMode()): PromptInjectionDetector {
+export function createInjectionDetector(
+  mode: SecurityMode = securityMode()
+): PromptInjectionDetector {
   return new PromptInjectionDetector({
     model: securityModel(),
     threshold: envNum('PI_THRESHOLD', DEFAULT_PI_THRESHOLD),
@@ -214,7 +216,10 @@ export async function scanToolOutputForInjection(text: string, source: string): 
     // Fail closed, mirroring the processors' own semantics (risk R1 note):
     // a broken guard model must not silently admit unscanned content.
     logger.warn(`[security-stack] tool-output scan failed (fail-closed):`, error);
-    throw new Error(`Injection scan of tool output failed: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
+    throw new Error(
+      `Injection scan of tool output failed: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error }
+    );
   }
 }
 
@@ -224,11 +229,16 @@ export async function scanToolOutputForInjection(text: string, source: string): 
  * beside it by design — slot 0 travels in the stack but keeps its own switch
  * and inert-state reporting.
  */
-export function registerSecurityStackStatus(services: ServiceRegistry, hasProviderKeys: boolean): void {
+export function registerSecurityStackStatus(
+  services: ServiceRegistry,
+  hasProviderKeys: boolean
+): void {
   const mode = securityMode();
   const warnings: string[] = [];
-  if (process.env.FILE_JAIL === 'off') warnings.push('⚠ FILE_JAIL=off — workspace containment DISABLED');
-  if (process.env.REVIEW_APPROVAL === 'off') warnings.push('⚠ REVIEW_APPROVAL=off — deep-research publishes without review');
+  if (process.env.FILE_JAIL === 'off')
+    warnings.push('⚠ FILE_JAIL=off — workspace containment DISABLED');
+  if (process.env.REVIEW_APPROVAL === 'off')
+    warnings.push('⚠ REVIEW_APPROVAL=off — deep-research publishes without review');
   const suffix = warnings.length ? ` ${warnings.join(' ')}` : '';
 
   if (mode === 'off') {
@@ -252,8 +262,9 @@ export function registerSecurityStackStatus(services: ServiceRegistry, hasProvid
   services.push({
     name: 'Guardrails',
     active: true,
-    detail: mode === 'log'
-      ? `injection|pii|token-limit|cache active (log-only)${suffix}`
-      : `injection|pii|token-limit|cache active (block)${suffix}`,
+    detail:
+      mode === 'log'
+        ? `injection|pii|token-limit|cache active (log-only)${suffix}`
+        : `injection|pii|token-limit|cache active (block)${suffix}`,
   });
 }

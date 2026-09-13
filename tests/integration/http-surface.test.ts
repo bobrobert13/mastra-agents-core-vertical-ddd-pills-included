@@ -30,9 +30,12 @@ import { computeSignature } from '../../src/mastra/routes/middleware/webhook-sig
  */
 
 const RUN = process.env.RUN_HTTP_TESTS === '1';
-const hasProviderKey = ['DEEPINFRA_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY'].some(
-  key => process.env[key]?.trim(),
-);
+const hasProviderKey = [
+  'DEEPINFRA_API_KEY',
+  'OPENAI_API_KEY',
+  'ANTHROPIC_API_KEY',
+  'GOOGLE_API_KEY',
+].some(key => process.env[key]?.trim());
 
 const SECRET = 'whsec_test_secret';
 const SIGN_BODY = '{"event":"payment.succeeded","data":{"amount":42}}';
@@ -76,12 +79,14 @@ function mountSurface(services: ServiceRegistry): Hono {
   // `as` bridge: the surface's CorsOptions comes from @mastra's BUNDLED hono
   // copy; only the plain origin list crosses over here (harness glue).
   const origin = ((surface.cors?.origin as string | string[] | undefined) ?? '*') as
-    | string
-    | string[];
+    string | string[];
   app.use('*', cors({ ...defaults, origin }));
 
   // framework glue the real server provides before custom handlers run
-  app.use('*', (async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
+  app.use('*', (async (
+    c: { set: (key: string, value: unknown) => void },
+    next: () => Promise<void>
+  ) => {
     c.set('mastra', mastra);
     c.set('requestContext', new RequestContext());
     await next();
@@ -132,12 +137,17 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
       const response = await app.fetch(
         new Request('http://test.local/hooks/test', {
           method: 'POST',
-          headers: { 'content-type': 'application/json', 'x-webhook-signature': computeSignature(SIGN_BODY, SECRET) },
+          headers: {
+            'content-type': 'application/json',
+            'x-webhook-signature': computeSignature(SIGN_BODY, SECRET),
+          },
           body: SIGN_BODY,
-        }),
+        })
       );
       expect(response.status).toBe(200);
-      expect(await response.text()).toBe('{"received":true,"source":"test","type":"webhook.received"}');
+      expect(await response.text()).toBe(
+        '{"received":true,"source":"test","type":"webhook.received"}'
+      );
       expect(seen).toHaveLength(1);
       expect(seen[0].payload.source).toBe('test');
       expect(seen[0].payload.event).toBe('payment.succeeded');
@@ -155,7 +165,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
           method: 'POST',
           headers: { 'x-webhook-signature': computeSignature(body, SECRET) },
           body,
-        }),
+        })
       );
       expect(response.status).toBe(400);
       expect(await response.text()).toBe('{"error":"invalid webhook payload"}');
@@ -173,7 +183,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
     const bodies: string[] = [];
     for (const headers of variants) {
       const response = await app.fetch(
-        new Request('http://test.local/hooks/test', { method: 'POST', headers, body: SIGN_BODY }),
+        new Request('http://test.local/hooks/test', { method: 'POST', headers, body: SIGN_BODY })
       );
       expect(response.status).toBe(401);
       bodies.push(await response.text());
@@ -195,7 +205,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
         method: 'POST',
         headers: { 'x-webhook-signature': computeSignature(SIGN_BODY, SECRET) }, // "valid" against the old secret
         body: SIGN_BODY,
-      }),
+      })
     );
     expect(response.status).toBe(401);
     expect(await response.text()).toBe('{"error":"invalid webhook signature"}');
@@ -210,7 +220,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
       new Request('http://test.local/hooks/test', {
         method: 'OPTIONS',
         headers: { Origin: 'https://app.example.com', 'Access-Control-Request-Method': 'POST' },
-      }),
+      })
     );
     expect(response.headers.get('access-control-allow-origin')).toBe('https://app.example.com');
     expect(response.headers.get('access-control-allow-methods')).toContain('POST');
@@ -222,7 +232,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
       new Request('http://test.local/hooks/test', {
         method: 'OPTIONS',
         headers: { Origin: 'https://evil.example.com', 'Access-Control-Request-Method': 'POST' },
-      }),
+      })
     );
     expect(response.headers.get('access-control-allow-origin')).toBeNull();
   });
@@ -233,8 +243,11 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
     const response = await bare.fetch(
       new Request('http://test.local/hooks/test', {
         method: 'OPTIONS',
-        headers: { Origin: 'https://anywhere.example.com', 'Access-Control-Request-Method': 'POST' },
-      }),
+        headers: {
+          Origin: 'https://anywhere.example.com',
+          'Access-Control-Request-Method': 'POST',
+        },
+      })
     );
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     vi.stubEnv('CORS_ORIGIN', 'https://app.example.com,https://admin.example.com'); // restore baseline
@@ -262,7 +275,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
           method: 'POST',
           headers: { 'x-webhook-signature': sig, 'x-forwarded-for': xff },
           body: SIGN_BODY,
-        }),
+        })
       );
       lastStatus = response.status;
     }
@@ -272,7 +285,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
         method: 'POST',
         headers: { 'x-webhook-signature': sig, 'x-forwarded-for': xff },
         body: SIGN_BODY,
-      }),
+      })
     );
     expect(burst.status).toBe(429);
     expect(await burst.text()).toBe('{"error":"rate limit exceeded"}');
@@ -283,7 +296,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
         method: 'POST',
         headers: { 'x-webhook-signature': sig, 'x-forwarded-for': '192.0.2.45' },
         body: SIGN_BODY,
-      }),
+      })
     );
     expect(other.status).toBe(200);
     vi.stubEnv('RATE_LIMIT_WINDOW_MS', '');
@@ -314,7 +327,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
             messages: [{ role: 'user', content: 'say hi' }],
             memory: { thread: `http-surface-${Date.now()}`, resource: 'http-surface-test' },
           }),
-        }),
+        })
       );
       expect(response.status).toBe(200);
       expect(response.headers.get('content-type') ?? '').toMatch(/^text\/event-stream/);
@@ -341,7 +354,7 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
-      }),
+      })
     );
     expect(response.status).toBe(404);
     expect(await response.text()).toBe('{"error":"agent \\"does-not-exist\\" not found"}');

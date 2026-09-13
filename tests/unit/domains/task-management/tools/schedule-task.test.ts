@@ -6,7 +6,10 @@ import {
 } from '../../../../../src/mastra/domains/task-management/tools/schedule-task';
 import { runTool } from '../../../../../src/mastra/shared/tools/run-tool';
 import { getAppDb, resetAppDb } from '../../../../../src/mastra/shared/config/db';
-import { createTaskRepository, type TaskRepository } from '../../../../../src/mastra/domains/task-management/repo';
+import {
+  createTaskRepository,
+  type TaskRepository,
+} from '../../../../../src/mastra/domains/task-management/repo';
 import { eventBus } from '../../../../../src/mastra/shared/events';
 import type { TaskScheduledEvent } from '../../../../../src/mastra/domains/task-management/events';
 
@@ -28,13 +31,25 @@ interface ScheduleTaskOutput {
 function createFakeSchedules() {
   const rows = new Map<
     string,
-    { id: string; agentId: string; cron: string; prompt: string; timezone?: string; status: string; nextFireAt: number }
+    {
+      id: string;
+      agentId: string;
+      cron: string;
+      prompt: string;
+      timezone?: string;
+      status: string;
+      nextFireAt: number;
+    }
   >();
   const norm = (id: string) => {
     const bare = id.trim().replace(/^agent_/, '');
     return 'agent_' + bare.toLowerCase().replace(/\s+/g, '-');
   };
-  const calls = { create: [] as unknown[], update: [] as Array<[string, unknown]>, get: [] as string[] };
+  const calls = {
+    create: [] as unknown[],
+    update: [] as Array<[string, unknown]>,
+    get: [] as string[],
+  };
   const state = { conflictOnce: false };
 
   return {
@@ -49,7 +64,14 @@ function createFakeSchedules() {
         calls.get.push(id);
         return rows.get(norm(id)) ?? null;
       },
-      async create(input: { id?: string; agentId: string; cron: string; prompt: string; timezone?: string; status?: string }) {
+      async create(input: {
+        id?: string;
+        agentId: string;
+        cron: string;
+        prompt: string;
+        timezone?: string;
+        status?: string;
+      }) {
         calls.create.push(input);
         const id = norm(input.id ?? `random-${rows.size}`);
         if (state.conflictOnce) {
@@ -86,7 +108,10 @@ function createFakeSchedules() {
         rows.set(id, row);
         return { ...row };
       },
-      async update(id: string, patch: { cron?: string; timezone?: string; prompt?: string; status?: string }) {
+      async update(
+        id: string,
+        patch: { cron?: string; timezone?: string; prompt?: string; status?: string }
+      ) {
         calls.update.push([id, patch]);
         const row = rows.get(norm(id));
         if (!row) throw new Error(`Schedule "${id}" not found.`);
@@ -142,7 +167,9 @@ describe('ScheduleTaskTool (real schedules via context.mastra.schedules)', () =>
 
   beforeEach(() => {
     events = [];
-    unsub = eventBus.subscribe<TaskScheduledEvent>('task.scheduled', (e) => { events.push(e); });
+    unsub = eventBus.subscribe<TaskScheduledEvent>('task.scheduled', e => {
+      events.push(e);
+    });
   });
 
   afterEach(() => unsub());

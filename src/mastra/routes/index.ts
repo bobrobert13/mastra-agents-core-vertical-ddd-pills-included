@@ -65,7 +65,7 @@ export function buildServerSurface(services: ServiceRegistry): ServerSurface {
       logger.warn(
         'CORS_ORIGIN is unset in production — the permissive "*" CORS default stays active. ' +
           'Set CORS_ORIGIN to a comma-separated allow-list (docker-compose.prod.yml passes it ' +
-          'through) — this is a hardening gap, not an auth hole.',
+          'through) — this is a hardening gap, not an auth hole.'
       );
     }
   }
@@ -84,7 +84,7 @@ export function buildServerSurface(services: ServiceRegistry): ServerSurface {
   } else {
     const partial = Boolean(
       (process.env.RATE_LIMIT_WINDOW_MS ?? '').trim() ||
-        (process.env.RATE_LIMIT_MAX_REQUESTS ?? '').trim(),
+      (process.env.RATE_LIMIT_MAX_REQUESTS ?? '').trim()
     );
     services.push({
       name: 'Rate limiting',
@@ -108,7 +108,7 @@ export function buildServerSurface(services: ServiceRegistry): ServerSurface {
           name: 'Webhook signing',
           active: false,
           detail: 'no WEBHOOK_SECRET — /hooks/* rejects 401',
-        },
+        }
   );
 
   return {

@@ -16,10 +16,17 @@ import { researchAgent } from '../../src/mastra/domains/research';
 const here = dirname(fileURLToPath(import.meta.url));
 const dataset = JSON.parse(
   readFileSync(resolve(here, 'datasets/guardrails-dataset.json'), 'utf-8')
-) as Array<{ id: string; input: { injectionText: string }; groundTruth: { mustTripwire: boolean } }>;
+) as Array<{
+  id: string;
+  input: { injectionText: string };
+  groundTruth: { mustTripwire: boolean };
+}>;
 
 const hasProviderKey = Boolean(
-  process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GOOGLE_API_KEY || process.env.DEEPINFRA_API_KEY
+  process.env.OPENAI_API_KEY ||
+  process.env.ANTHROPIC_API_KEY ||
+  process.env.GOOGLE_API_KEY ||
+  process.env.DEEPINFRA_API_KEY
 );
 
 describe('guardrails dataset contract (structural, offline)', () => {

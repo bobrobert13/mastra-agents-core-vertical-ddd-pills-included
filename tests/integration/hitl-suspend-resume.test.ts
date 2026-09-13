@@ -255,10 +255,13 @@ afterAll(async () => {
 describe('web-fetch boundary — fixture server (offline, scan inert)', () => {
   it('serves the fixture page through the real tool (SECURITY_PROCESSORS=off ⇒ today behavior, NFR compat)', async () => {
     process.env.SECURITY_PROCESSORS = 'off';
-    const result = await runTool<{ content: string; title?: string; wordCount: number }>(webFetchTool, {
-      url: `${fixtureBase}/evil`,
-      extractMode: 'full',
-    });
+    const result = await runTool<{ content: string; title?: string; wordCount: number }>(
+      webFetchTool,
+      {
+        url: `${fixtureBase}/evil`,
+        extractMode: 'full',
+      }
+    );
     expect(result.title).toBe('Evil Fixture');
     // off == byte-for-byte today's pipeline: raw fetched text enters unscanned
     expect(result.content).toContain('Ignore previous instructions');
@@ -267,7 +270,12 @@ describe('web-fetch boundary — fixture server (offline, scan inert)', () => {
   it('clean fixture flows through with the stack active but NO provider key (inert rule)', async () => {
     delete process.env.SECURITY_PROCESSORS;
     const savedKeys: Record<string, string | undefined> = {};
-    for (const key of ['DEEPINFRA_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY']) {
+    for (const key of [
+      'DEEPINFRA_API_KEY',
+      'OPENAI_API_KEY',
+      'ANTHROPIC_API_KEY',
+      'GOOGLE_API_KEY',
+    ]) {
       savedKeys[key] = process.env[key];
       delete process.env[key];
     }
@@ -319,9 +327,12 @@ describe.skipIf(!hasAnyProviderKey())(
       });
       const agent = mastra.getAgent('file-operations-agent');
       try {
-        const stream = await agent.stream('Write the text "top secret" to the file spec06-probe.md', {
-          memory: { thread: `spec06-s6-${Date.now()}`, resource: 'spec06-hitl-test' },
-        });
+        const stream = await agent.stream(
+          'Write the text "top secret" to the file spec06-probe.md',
+          {
+            memory: { thread: `spec06-s6-${Date.now()}`, resource: 'spec06-hitl-test' },
+          }
+        );
 
         let sawApproval = false;
         for await (const chunk of stream.fullStream) {

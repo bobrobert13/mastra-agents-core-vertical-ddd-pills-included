@@ -23,7 +23,10 @@ type HonoMiddleware = Parameters<Hono['use']>[1];
 function buildApp(withPopulator: boolean): Hono {
   const app = new Hono();
   // stand-in for the framework glue: requestContext is always present
-  app.use('*', (async (c: { set: (key: string, value: unknown) => void }, next: () => Promise<void>) => {
+  app.use('*', (async (
+    c: { set: (key: string, value: unknown) => void },
+    next: () => Promise<void>
+  ) => {
     c.set('requestContext', new RequestContext());
     await next();
   }) as unknown as HonoMiddleware);
@@ -35,8 +38,7 @@ function buildApp(withPopulator: boolean): Hono {
 }
 
 async function timeApp(app: Hono): Promise<number> {
-  const request = () =>
-    app.fetch(new Request('http://localhost/bench', { method: 'GET' }));
+  const request = () => app.fetch(new Request('http://localhost/bench', { method: 'GET' }));
   for (let i = 0; i < 50; i++) await request(); // warm up JIT
   const t0 = performance.now();
   for (let i = 0; i < N; i++) await request();
@@ -54,7 +56,7 @@ describe.skipIf(Boolean(process.env.CI))('middleware overhead bench (non-CI)', (
     console.log(
       `[bench] requestContextPopulator — without: ${without.toFixed(4)} ms/req, ` +
         `with: ${withPop.toFixed(4)} ms/req, delta: ${delta.toFixed(4)} ms/req ` +
-        `(PROPOSED bound < 5 ms p95, spec 08 Phase 5; p95-proxy ${p95Proxy.toFixed(4)} ms)`,
+        `(PROPOSED bound < 5 ms p95, spec 08 Phase 5; p95-proxy ${p95Proxy.toFixed(4)} ms)`
     );
 
     expect(without).toBeGreaterThanOrEqual(0);

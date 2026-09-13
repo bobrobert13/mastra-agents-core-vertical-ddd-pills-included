@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { LibSQLStore } from '@mastra/libsql';
 
-import { buildVectors, VECTOR_STORE_NAME, RECALL_OPTIONS } from '../../src/mastra/shared/config/vectors';
+import {
+  buildVectors,
+  VECTOR_STORE_NAME,
+  RECALL_OPTIONS,
+} from '../../src/mastra/shared/config/vectors';
 import type { ServiceStatus } from '../../src/mastra/shared/config/service-status';
-import { createIndexKnowledgeWorkflow, KNOWLEDGE_INDEX_NAME } from '../../src/mastra/domains/knowledge';
+import {
+  createIndexKnowledgeWorkflow,
+  KNOWLEDGE_INDEX_NAME,
+} from '../../src/mastra/domains/knowledge';
 import { createHashingEmbedder } from '../helpers/deterministic-embedder';
 
 /**
@@ -34,10 +41,13 @@ describe.skipIf(!isPg)('Scenario 2 — PgVector on postgres (integration-postgre
     // knowledge_docs created by a workflow run → describeIndex honors 1024 (E5)
     const embedder = createHashingEmbedder(1024);
     const workflow = createIndexKnowledgeWorkflow({ embedder: embedder.model, vector: store! });
-    const result = await (await workflow.createRun()).start({
+    const result = await (
+      await workflow.createRun()
+    ).start({
       inputData: {
         source: 'inline',
-        content: 'PgVector scenario two document: rotations happen Fridays and audits happen quarterly in the staging environment.',
+        content:
+          'PgVector scenario two document: rotations happen Fridays and audits happen quarterly in the staging environment.',
         contentType: 'text',
         docId: 'pg-scenario-2',
       },

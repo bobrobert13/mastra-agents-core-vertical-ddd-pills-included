@@ -30,10 +30,13 @@ const msg = (id: string, text: string) => ({
 
 async function runRecall(embedder: MastraEmbeddingModel<string>) {
   const vector = new LibSQLVector({ id: 'recall-it-vector', url: 'file::memory:' });
-  const memory = await buildDomainMemory({ generateTitle: true }, {
-    embedder,
-    vector,
-  })({ requestContext: {} as never });
+  const memory = await buildDomainMemory(
+    { generateTitle: true },
+    {
+      embedder,
+      vector,
+    }
+  )({ requestContext: {} as never });
   memory.setStorage(new LibSQLStore({ id: 'recall-it-storage', url: 'file::memory:' }));
 
   await memory.createThread({ threadId: 'thread-1', resourceId: 'user-a' });
@@ -43,7 +46,10 @@ async function runRecall(embedder: MastraEmbeddingModel<string>) {
     messages: [
       msg('fact', 'the staging DB password rotation is Fridays'),
       ...Array.from({ length: 45 }, (_, i) =>
-        msg(`filler-${i}`, `filler update ${i}: the team retro highlighted ${i} wins, blockers and experiment notes`)
+        msg(
+          `filler-${i}`,
+          `filler update ${i}: the team retro highlighted ${i} wins, blockers and experiment notes`
+        )
       ),
       // loose on purpose: MessageList normalizes at the boundary
     ] as never,

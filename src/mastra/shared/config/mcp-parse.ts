@@ -59,7 +59,10 @@ function interpolateString(value: string, entryName: string, where: string): str
     const resolved = process.env[varName];
     if (resolved === undefined) {
       throw new Error(
-        entryError(entryName, `environment variable "${varName}" referenced as ${match} in ${where} is not set`),
+        entryError(
+          entryName,
+          `environment variable "${varName}" referenced as ${match} in ${where} is not set`
+        )
       );
     }
     return resolved;
@@ -95,7 +98,9 @@ function checkEntry(name: string, parsed: McpServerJsonEntry): void {
   const hasHttp = parsed.url !== undefined;
   if (hasStdio === hasHttp) {
     // both OR neither → transport ambiguity is a config bug (§3.1 DECIDED)
-    throw new Error(entryError(name, 'exactly one of "command" (stdio) or "url" (HTTP) is required'));
+    throw new Error(
+      entryError(name, 'exactly one of "command" (stdio) or "url" (HTTP) is required')
+    );
   }
   if (hasStdio) {
     for (const key of HTTP_ONLY_KEYS) {
@@ -154,26 +159,38 @@ export function parseMcpServers(raw: string | undefined): Record<string, McpServ
   try {
     parsedJson = JSON.parse(raw);
   } catch (error) {
-    throw new Error(jsonError(`JSON parse failed ("${error instanceof Error ? error.message : String(error)}")`), {
-      cause: error,
-    });
+    throw new Error(
+      jsonError(`JSON parse failed ("${error instanceof Error ? error.message : String(error)}")`),
+      {
+        cause: error,
+      }
+    );
   }
 
   if (parsedJson === null || typeof parsedJson !== 'object' || Array.isArray(parsedJson)) {
-    throw new Error(jsonError('expected a JSON object of server definitions, got ' + (Array.isArray(parsedJson) ? 'an array' : typeof parsedJson)));
+    throw new Error(
+      jsonError(
+        'expected a JSON object of server definitions, got ' +
+          (Array.isArray(parsedJson) ? 'an array' : typeof parsedJson)
+      )
+    );
   }
 
   const out: Record<string, McpServerJsonEntry> = {};
   for (const [name, value] of Object.entries(parsedJson as Record<string, unknown>)) {
     if (name === RESERVED_SERVER_KEY) {
       throw new Error(
-        entryError(name, `"${RESERVED_SERVER_KEY}" is reserved for this project's own exposed MCPServer key`),
+        entryError(
+          name,
+          `"${RESERVED_SERVER_KEY}" is reserved for this project's own exposed MCPServer key`
+        )
       );
     }
     const result = entrySchema.safeParse(value);
     if (!result.success) {
       const issue = result.error.issues[0];
-      const path = issue.path.length > 0 ? `"${issue.path.join('.')}": ${issue.message}` : issue.message;
+      const path =
+        issue.path.length > 0 ? `"${issue.path.join('.')}": ${issue.message}` : issue.message;
       throw new Error(entryError(name, path));
     }
     const entry = result.data as McpServerJsonEntry;
@@ -196,10 +213,18 @@ export function mcpWarnings(entries: Record<string, McpServerJsonEntry>): McpWar
   for (const [name, entry] of Object.entries(entries)) {
     const stdio = entry.command !== undefined;
     if (stdio && entry.inheritDefaultEnv !== false) {
-      warnings.push({ server: name, severity: 'banner', message: `${name}: no inheritDefaultEnv:false — stdio env not isolated` });
+      warnings.push({
+        server: name,
+        severity: 'banner',
+        message: `${name}: no inheritDefaultEnv:false — stdio env not isolated`,
+      });
     }
     if (entry.requireToolApproval === false) {
-      warnings.push({ server: name, severity: 'banner', message: `${name}: approval OFF — every tool runs unattended` });
+      warnings.push({
+        server: name,
+        severity: 'banner',
+        message: `${name}: approval OFF — every tool runs unattended`,
+      });
     }
     if (entry.url && entry.requestInit?.headers) {
       warnings.push({

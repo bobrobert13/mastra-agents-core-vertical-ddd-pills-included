@@ -50,7 +50,9 @@ describe('CreateTaskTool (real persistence)', () => {
 
   beforeEach(() => {
     received = [];
-    unsubscribe = eventBus.subscribe<TaskCreatedEvent>('task.created', (e) => { received.push(e); });
+    unsubscribe = eventBus.subscribe<TaskCreatedEvent>('task.created', e => {
+      received.push(e);
+    });
   });
 
   afterEach(() => {
@@ -107,11 +109,9 @@ describe('CreateTaskTool (real persistence)', () => {
   });
 
   it('stamps resourceId from context.agent (ToolExecutionContext has no top-level resourceId)', async () => {
-    const result = await runTool<CreateTaskOutput>(
-      createTaskTool,
-      { title: 'Scoped task' },
-      { agent: { resourceId: 'team-alpha' } } as unknown as Partial<ToolExecutionContext>
-    );
+    const result = await runTool<CreateTaskOutput>(createTaskTool, { title: 'Scoped task' }, {
+      agent: { resourceId: 'team-alpha' },
+    } as unknown as Partial<ToolExecutionContext>);
 
     const read = await (await repo()).getTask(result.taskId);
     expect(read?.resourceId).toBe('team-alpha');
@@ -121,6 +121,6 @@ describe('CreateTaskTool (real persistence)', () => {
     const result = await runTool<CreateTaskOutput>(createTaskTool, { title: 'Persisted forever' });
     const repository = await repo();
     const listed = await repository.listTasks({ status: 'pending', limit: 100 });
-    expect(listed.some((t) => t.id === result.taskId)).toBe(true);
+    expect(listed.some(t => t.id === result.taskId)).toBe(true);
   });
 });

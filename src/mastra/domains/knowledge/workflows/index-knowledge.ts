@@ -105,11 +105,16 @@ function assertInsideWorkspace(resolved: string): void {
   const roots = [process.cwd(), path.join(process.cwd(), 'workspace')];
   const inside = roots.some(root => resolved === root || resolved.startsWith(root + path.sep));
   if (!inside) {
-    throw new Error(`index-knowledge: path "${resolved}" escapes the workspace root (path containment)`);
+    throw new Error(
+      `index-knowledge: path "${resolved}" escapes the workspace root (path containment)`
+    );
   }
 }
 
-function contentTypeFromExtension(filePath: string, fallback: KnowledgeContentType): KnowledgeContentType {
+function contentTypeFromExtension(
+  filePath: string,
+  fallback: KnowledgeContentType
+): KnowledgeContentType {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.md' || ext === '.markdown') return 'markdown';
   if (ext === '.html' || ext === '.htm') return 'html';
@@ -203,7 +208,9 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
     execute: async ({ inputData }) => {
       const embedder = deps.embedder ?? resolveEmbedder().passage;
       if (!embedder) {
-        throw new Error('index-knowledge: embed-chunks — no embedder resolved (see banner, "Semantic recall: off (no embedder)")');
+        throw new Error(
+          'index-knowledge: embed-chunks — no embedder resolved (see banner, "Semantic recall: off (no embedder)")'
+        );
       }
 
       const values = inputData.chunks.map(c => c.text);
@@ -244,10 +251,12 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
     }),
     outputSchema: workflowOutputSchema,
     execute: async ({ inputData, mastra }) => {
-      const store = resolveVectorStore(deps, mastra as { listVectors?: () => Record<string, unknown> } | undefined);
+      const store = resolveVectorStore(
+        deps,
+        mastra as { listVectors?: () => Record<string, unknown> } | undefined
+      );
       const { docId, source, chunks, vectors, dimension } = inputData;
-      const embedderDetail =
-        deps.embedderDetail ?? resolveEmbedder().detail ?? 'unknown-embedder';
+      const embedderDetail = deps.embedderDetail ?? resolveEmbedder().detail ?? 'unknown-embedder';
 
       const indexes = await store.listIndexes();
       if (!indexes.includes(KNOWLEDGE_INDEX_NAME)) {
@@ -281,7 +290,9 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
         })),
       });
 
-      logger.info(`knowledge: indexed ${chunks.length} chunks of "${docId}" into ${KNOWLEDGE_INDEX_NAME} (${dimension}d)`);
+      logger.info(
+        `knowledge: indexed ${chunks.length} chunks of "${docId}" into ${KNOWLEDGE_INDEX_NAME} (${dimension}d)`
+      );
       void eventBus.publish({
         type: 'knowledge.indexed',
         payload: {
