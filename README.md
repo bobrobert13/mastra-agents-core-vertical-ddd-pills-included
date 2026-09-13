@@ -1,32 +1,188 @@
 # Mastra Boilerplate
 
-Project-agnostic starter for AI agents built on [Mastra](https://mastra.ai): vertical-slicing architecture, **zero-config boot**, provider-agnostic models, high-availability Docker deployments, layered testing, CI/CD and a self-updating dependency pipeline.
+> A **production-shaped, project-agnostic starter** for AI agents built on [Mastra](https://mastra.ai).
+> Zero-config boot on a fresh clone, every infrastructure dependency **env-optional**, hardened by a
+> defense-in-depth guardrail pipeline, HA-ready Docker topology, two-tier eval gates that block CI,
+> and a self-updating dependency toolchain — documented end-to-end for humans **and** AI coding agents.
 
-## 🎯 Features
+**Stack:** TypeScript · Node ≥ 22.13 · `@mastra/core` 1.66 · `mastra` CLI 1.29 · Vitest 3 · ESLint 9 (flat) · Prettier · Docker Compose · GitHub Actions · Renovate
 
-- **Zero-config boot** — clone → `npm install --legacy-peer-deps` → `npm run dev`. No database, no API key, no `.env` required; every infrastructure dependency activates only when its env var exists (see the startup service banner).
-- **Vertical Slicing / DDD** — 4 reference domains (research, task-management, file-operations, communication), each self-contained: agent, tools, workflows, scorers, entities, events. Domains never import each other; cross-domain traffic goes through a typed event bus.
-- **Provider-agnostic models** — no model string is hard-coded. Choose via env: `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL` (any `provider/model-id` the [Mastra model router](https://mastra.ai/models) supports).
-- **Scope-dedicated agents** — every domain agent is hard-guarded: an LLM classifier aborts off-topic input *before the model runs* and answers with a one-line redirect to the right agent (instructions template + `createScopeGuard`; `SCOPE_GUARD=off` disables, inert without a key).
-- **Env-optional infrastructure** — PostgreSQL (+pgvector for future RAG) with LibSQL fallback, Redis Streams PubSub for distributed workers, observability with storage exporter and sensitive-data filter.
-- **High Availability** — role-switched multi-stage Dockerfile and a production compose with split workers (API×3 / orchestration×2 / scheduler×1 / backgroundTasks×2 / PostgreSQL / Redis 7).
-- **Layered testing** — smoke (zero-config boot), unit, cross-domain integration, structural evals; enforced in CI on every push/PR.
-- **Self-updating** — Renovate PRs, `npm run update` (all `@mastra/*` bumped + full gate), weekly Mastra codemod job.
-- **Hierarchical agent docs** — 15 `AGENTS.md` files documenting rules, deploys, conventions and gotchas for AI coding agents.
+|                                      |                                                                                                        |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| 🚀 **Boots with nothing configured** | no DB, no API keys, no `.env` — a startup banner tells you what is active                              |
+| 🧱 **Vertical slices / DDD**         | 4 agent domains + 1 workflow-only RAG slice, zero sibling imports                                      |
+| 🛡️ **Guardrails by default**         | scope enforcement + injection/PII detection + token budget + response cache + FS jail + human approval |
+| 🧠 **Memory that scales**            | observational memory + **keyless semantic recall** (local multilingual E5 embeddings)                  |
+| 🔌 **MCP in & out**                  | consume any MCP server from one JSON env var; expose a read-only MCP server yourself                   |
+| ☁️ **Real HA**                       | split workers over Redis Streams pubsub, dual build artifacts, chaos script                            |
+| ✅ **Quality that blocks**           | 8 CI jobs incl. typecheck + coverage floors + keyless eval gates with drift baselines                  |
+| 🤖 **Agent-readable repo**           | 18 hierarchical `AGENTS.md` files, 10 ADRs, 19 gotchas learned the hard way                            |
 
-## 📋 Prerequisites
+---
 
-- Node.js **≥ 22.13** (`engines` in package.json)
-- Nothing else. PostgreSQL/Docker/API keys are **optional** enhancements.
+## Table of contents
+
+- [Why this exists](#-why-this-exists) · [Architecture](#-architecture) · [What's inside](#-whats-inside)
+- [Quick start](#-quick-start) · [The startup banner](#-the-startup-banner) · [Configuration](#-configuration)
+- [Security model](#-security-model) · [Memory & RAG](#-memory--rag) · [MCP](#-mcp) · [HTTP surface & streaming](#-http-surface--streaming)
+- [Testing & CI](#-testing--ci) · [Deployment & HA](#-deployment--ha) · [Self-updating](#-self-updating)
+- [How this boilerplate was built (roadmap & provenance)](#-how-this-boilerplate-was-built-roadmap--provenance)
+- [Official documentation references](#-official-documentation-references) · [Conventions](#-conventions) · [Known caveats](#-known-caveats)
+
+---
+
+## 🎯 Why this exists
+
+Most agent starter projects make you choose between _a toy that boots instantly_ and _a shape you can actually ship_.
+This boilerplate refuses the trade-off:
+
+- **Zero-config is the contract.** `git clone → npm install --legacy-peer-deps → npm run dev` works with no
+  database, no API keys and no `.env`. Every "grown-up" capability (Postgres, Redis, auth, embeddings, MCP,
+  OTLP, rate limiting) activates **only when its env var exists** and degrades with an explicit banner line —
+  never a crash, never a silent lie.
+- **Production concerns are not filler.** Auth, guardrails, eval gates, HA worker topology and RAG were added
+  because they are what professional Mastra deployments actually need (see
+  [the gap analysis](docs/PRODUCTION-GAP-ANALYSIS.md) and the [spec series](docs/specs/README.md) that drove them).
+- **The repo documents itself for your future agents.** Every directory has an `AGENTS.md` with rules,
+  conventions and hard-won gotchas; every architectural choice has an ADR.
+
+## 🏗 Architecture
+
+### Vertical slices + one composition root
+
+```mermaid
+flowchart TD
+    subgraph root ["src/mastra — composition root"]
+        IDX["index.ts<br/>Mastra instance · server · banner"]
+        INFRA["shared/config/infrastructure.ts<br/>buildStorage → buildVectors → buildObservability<br/>→ buildPubsub → buildAuth → buildMcpClient"]
+    end
+
+    subgraph domains ["domains/ — never import each other"]
+        RES["research<br/>agent + 3 tools<br/>deep-research workflow<br/>(HITL review step)"]
+        TASK["task-management<br/>agent + repo (app_tasks)<br/>daily-digest @ cron"]
+        FILES["file-operations<br/>agent + jailed tools<br/>requireApproval"]
+        COMMS["communication<br/>agent + ask_user"]
+        KNOW["knowledge (workflow-only)<br/>index-knowledge + search_knowledge"]
+    end
+
+    subgraph shared ["shared/ — cross-cutting only"]
+        STACK["processors/security-stack.ts<br/>guard → token-limit → injection → cache → PII"]
+        BUS["events/event-bus.ts<br/>+ Redis cross-process bridge"]
+        ROUTES["../routes — webhook · health · stream<br/>../mcp — outbound MCP server"]
+    end
+
+    IDX --> domains
+    IDX --> INFRA
+    INFRA --> shared
+    RES -. "Mastra tools registry<br/>(no sibling import)" .-> KNOW
+    RES & TASK & FILES & COMMS --> STACK
+    TASK & RES -. "typed events" .-> BUS
+```
+
+**The one structural rule:** a domain owns everything it needs (agent, tools, workflows, scorers, entities,
+events) and **never imports a sibling**. Cross-domain needs are mediated two ways: typed events on the shared
+bus, or Mastra's top-level registries (`tools`, `vectors`) wired at the composition root. The `knowledge`
+slice is the showcase: its query tool reaches the research agent through the instance-level tools registry —
+no coupling, degrade-safe.
+
+### The agent request pipeline (every `generate()`/`stream()`)
+
+```mermaid
+sequenceDiagram
+    actor U as User/Client
+    participant SG as Scope guard (slot 0)
+    participant TL as TokenLimiter (1)
+    participant PID as InjectionDetector (2, keyed)
+    participant RC as ResponseCache (3)
+    participant LLM as Model (+ tools)
+    participant PII as PIIDetector (output)
+
+    U->>SG: prompt
+    SG--xU: off-topic → TripWire redirect<br/>(before the model runs)
+    SG->>TL: in scope
+    TL->>PID: pruned to TOKEN_LIMIT
+    PID--xU: injection → abort (hard-throw by design)
+    PID->>RC: clean
+    RC-->>U: cache hit replays prior answer
+    RC->>LLM: miss → model + tool loop
+    Note over LLM: file writes / MCP mutations<br/>pause for human approval
+    LLM->>PII: answer
+    PII-->>U: masked PII output
+```
+
+Deterministic slots (1, 3 + the FS jail) work **without API keys**; the LLM classifiers (2, output) are
+inert — and clearly labeled in the banner — when no provider key exists. This asymmetry is deliberate:
+Mastra's built-in detectors _hard-throw_ on guard-model failure, so keyless users must never be routed
+through them ([ADR-009](docs/adr/009-guardrails-security-processor-pipeline.md)).
+
+## 🧰 What's inside
+
+### Example domains (delete what you don't need)
+
+| Domain            | Agent                    | Tools / internals                                                                            | Workflows                                                    | Notable                                                                                                           |
+| ----------------- | ------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `research`        | `research-agent`         | `web_search` (key-free DuckDuckGo), `web_fetch`, `summarize`                                 | `deep-research` (4 steps + **suspend-for-review**)           | reference pattern for provider-agnostic tools; consumes `search_knowledge` via the tools registry                 |
+| `task-management` | `task-management-agent`  | `create_task`, `update_task` (optimistic locking), `schedule_task` (real `mastra.schedules`) | `daily-digest` — declarative `0 9 * * *` UTC cron            | reference for **domain-owned persistence** (`app_tasks` beside Mastra's tables, ADR-008) and event-emitting tools |
+| `file-operations` | `file-operations-agent`  | `read_file`, `write_file`, `edit_file` — jailed + approval-gated                             | —                                                            | reference for LLM-exposed FS access done safely (ADR-009)                                                         |
+| `communication`   | `communication-agent`    | `ask_user` (structured)                                                                      | —                                                            | minimal slice skeleton                                                                                            |
+| `knowledge`       | _(no agent — by design)_ | `search_knowledge` tool                                                                      | `index-knowledge` (chunk → embed → dimension-guard → upsert) | chat-with-docs E2E example, fail-fast on embedder/dimension mismatch                                              |
+
+### Infrastructure builders (`shared/config/`) — one env var each, one module each
+
+| Module                    | Activates with                                                                     | Without it                                                                                 |
+| ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `storage.ts` + `db.ts`    | `DATABASE_URL` (postgres) / `LIBSQL_URL`                                           | LibSQL `file:./mastra.db`; both share one URL resolver                                     |
+| `vectors.ts`              | follows storage (PgVector / LibSQLVector) + embedder ladder                        | semantic recall off; **never crashes**                                                     |
+| `model.ts`                | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL`, `EMBEDDING_MODEL`, `EVAL_JUDGE_MODEL` | `openai/gpt-4o-mini` + local fastembed E5 (key-free, 1024d)                                |
+| `observability.ts`        | on by default; `OTEL_EXPORTER_OTLP_ENDPOINT` adds OTLP                             | storage-only exporters (byte-stable) + sensitive-data filter                               |
+| `pubsub.ts`               | `REDIS_URL` → Redis Streams                                                        | in-process bus; split workers unavailable                                                  |
+| `auth.ts`                 | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN` bearer)                          | **dev: boots with ⚠️ warning · prod: refuses to boot** (`AUTH_DISABLED=true` escape hatch) |
+| `mcp-parse.ts` / `mcp.ts` | `MCP_SERVERS` (JSON, `${VAR}` interpolation, per-agent routing)                    | zero connects, zero subprocesses                                                           |
+| `security-stack.ts`       | on by default; `SECURITY_PROCESSORS=off                                            | log`                                                                                       | scope guard alone; deterministic slots stay on |
+| `schedules.ts` / `env.ts` | banner reporting / Zod validation of malformed-present env                         | silent-none / no-op — absence is always legal                                              |
+
+Plus: `custom routes` (`/hooks/:source` HMAC · `/health/version` · `/stream/:agentId` SSE), the outbound
+read-only `MCPServer`, `AppDatabase` factory, workspace jail, shared response cache, event bus bridge.
+
+### Quality & ops tooling
+
+- **4 test tiers + gates**: smoke (zero-config boot of the real instance), unit, cross-domain/HTTP/schedules
+  integration, two-tier evals — **327 tests green, coverage 87%** at time of writing.
+- **CI**: 8 blocking jobs (`lint, typecheck, build, coverage, test-smoke, test-unit, test-integration, test-evals`)
+  - a non-gating nightly [`evals-live.yml`](.github/workflows/evals-live.yml) for LLM-judge experiments.
+- **Docker**: dev compose (app + pgvector) + HA prod compose + chaos script (`tests/chaos/api-kill.sh`).
+- **Operator scripts**: `init`, `health-check`, `update` (bump all Mastra packages + re-run full gate).
+- **Docs**: 10 ADRs (`docs/adr/`), 8 phase specs + index (`docs/specs/`), gap analysis, testing guide,
+  18 hierarchical `AGENTS.md`, 19 gotchas in the root doc.
 
 ## 🚀 Quick start
 
 ```bash
-npm install --legacy-peer-deps   # @mastra/evals ↔ vitest peer conflict (see AGENTS.md gotcha #1)
-npm run dev                      # Studio: http://localhost:4111
+# 1. Install (peer conflict @mastra/evals ↔ vitest is a known upstream quirk — see gotcha #1)
+npm install --legacy-peer-deps
+
+# 2. Run — Studio opens at http://localhost:4111
+npm run dev
+
+# 3. Talk to an agent (Studio handles threads automatically)
 ```
 
-The terminal prints a **service availability banner** — e.g. on a fresh clone:
+Optional upgrades, all independent:
+
+```bash
+# Real Postgres + pgvector (dev):
+cd docker && docker-compose up -d
+
+# Full quality gate before committing anything:
+npm run lint && npx tsc --noEmit && npm run test:all && npm run build:all
+
+# A frontend consuming a streaming agent — copy/paste level:
+node examples/stream-consumer.mjs     # needs `npm run dev` up (see [streaming](#-http-surface--streaming))
+```
+
+### The startup banner
+
+Every boot prints what is live and what is dormant — the banner is the zero-config contract made visible:
 
 ```text
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -34,200 +190,249 @@ The terminal prints a **service availability banner** — e.g. on a fresh clone:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Environment: development
 ✅ Storage          LibSQL local file:./mastra.db — feedback read-only (set DATABASE_URL for PostgreSQL)
+✅ Vector store     LibSQLVector (file:./mastra.db — cosine)
+✅ Semantic recall  on (fastembed/multilingual-e5-large · 1024d · scope:resource)
+✅ Knowledge RAG    workflow index-knowledge + tool search_knowledge
 ✅ Observability    traces stored in configured storage (set ENABLE_OBSERVABILITY=false to disable)
-○ Model providers  no API keys found — set a provider key (see .env.example)
+○ OTLP export      set OTEL_EXPORTER_OTLP_ENDPOINT to export
+○ PubSub           in-process (EventEmitterPubSub) — split workers unavailable
+✅ Auth             JWT (MASTRA_JWT_SECRET) — /api/* + Studio protected
+○ MCP client       off — set MCP_SERVERS to connect external servers (see .env.example)
+✅ Guardrails       injection|pii|token-limit|cache active (block)
+✅ CORS            allow-list: http://localhost:3000
+✅ Rate limiting    100 req / 60000 ms fixed window per IP — in-process, per replica
+○ Webhook signing  no WEBHOOK_SECRET — /hooks/* rejects 401
+○ Schedules        inactive — MASTRA_WORKERS=false; wf_daily-digest will NOT fire (run one scheduler worker)
 Agents: research, tasks, files, comms
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ```
 
-Optional full bootstrap (deps + lint + build + tests + git init): `npm run init`.
+_(rows above include a `.env` with a provider key + JWT secret; a bare clone shows `○` for both — still boots, still browsable, `generate()` fails clearly.)_
 
-### Enable a model provider
+## ⚙️ Configuration
+
+Every variable in [`.env.example`](.env.example) is **optional** and documented inline. The short version:
+
+| Group           | Variables                                                                                                                                                                                           | Notes                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Providers       | `DEEPINFRA_API_KEY` `OPENAI_API_KEY` `ANTHROPIC_API_KEY` `GOOGLE_API_KEY`                                                                                                                           | set ≥1 to use agents; never required to boot                                                               |
+| Models          | `MODEL` · `MODEL_RESEARCH` `MODEL_TASKS` `MODEL_FILES` `MODEL_COMMS` · `DEFAULT_MODEL` · `OBSERVATIONAL_MEMORY_MODEL` · `EMBEDDING_MODEL` · `SCOPE_GUARD_MODEL` `SECURITY_MODEL` `EVAL_JUDGE_MODEL` | precedence `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL`; **no model string is ever hard-coded** (gotcha #5) |
+| Storage/vectors | `DATABASE_URL` · `LIBSQL_URL` · `SEMANTIC_RECALL=off`                                                                                                                                               | vector store follows storage; unset → local `file:./mastra.db`                                             |
+| Auth            | `MASTRA_JWT_SECRET` · `AUTH_DISABLED` · `MASTRA_WORKER_AUTH_TOKEN` · `AUTH_PROVIDER` (doc-extension)                                                                                                | production without auth **refuses to boot**                                                                |
+| HA/workers      | `REDIS_URL` · `MASTRA_WORKERS` · `MASTRA_STEP_EXECUTION_URL`                                                                                                                                        | split topology needs Redis; exactly ONE scheduler                                                          |
+| MCP             | `MCP_SERVERS` (JSON) · `ENABLE_MCP_SERVER=true`                                                                                                                                                     | malformed JSON = actionable boot error                                                                     |
+| Guardrails      | `SECURITY_PROCESSORS` · `TOKEN_LIMIT` · `PI_THRESHOLD` · `RESPONSE_CACHE(_TTL)` · `COST_LIMIT_USD` · `REVIEW_APPROVAL=off` · `FILE_JAIL=off` · `WORKSPACE_ROOT`                                     | see [security model](#-security-model)                                                                     |
+| HTTP surface    | `CORS_ORIGIN` (CSV) · `RATE_LIMIT_WINDOW_MS`+`RATE_LIMIT_MAX_REQUESTS` · `WEBHOOK_SECRET`                                                                                                           | limiter/webhook caveats in gotchas #18-#19                                                                 |
+| Observability   | `ENABLE_OBSERVABILITY=false` · `ENABLE_TRACING` · `LOG_LEVEL` · `SERVICE_NAME` · `OTEL_EXPORTER_OTLP_ENDPOINT`                                                                                      | OTLP is a guarded optional companion                                                                       |
+| Server/platform | `MASTRA_HOST` `MASTRA_PORT` · `MASTRA_PLATFORM_*`                                                                                                                                                   | `mastra deploy` scripts target the Mastra platform                                                         |
+| Evals           | `EVAL_STORAGE_URL` (throwaway; default `file:./eval-ci.db`)                                                                                                                                         | never the app DB (ADR-010)                                                                                 |
+
+## 🛡️ Security model
+
+Defense in depth, ordered, and each layer optional-but-explicit:
+
+1. **Server auth (ADR-004)** — built-in JWT protects `/api/*` + Studio login; worker bearer token via
+   `CompositeAuth`; `NODE_ENV=production` with no auth **exits 1** naming its fix. `/health` stays public
+   on purpose (compose healthcheck).
+2. **Scope guard (gotcha #7)** — per-domain LLM classifier aborts off-topic input _before the model runs_,
+   answering with a redirect to the right agent. `scopedInstructions()` enforces scope/refusal/tool-honesty
+   blocks in every prompt.
+3. **Security stack (ADR-009)** — token budget → prompt-injection detector → response cache (input);
+   PII mask (output). Fail-closed classifiers, inert-without-key rule, mutating agents excluded from cache.
+4. **Workspace jail + human approval** — every FS path resolved inside `WORKSPACE_ROOT` (realpath-checked);
+   `write_file`/`edit_file` require approval and a declined call provably performs no fs write.
+5. **HITL workflows** — `deep-research` suspends at `review-findings`; snapshots persist in storage and
+   survive restarts (`resume` after kill verified in integration tier). Rejection ends the run `failed`.
+6. **MCP trust boundary (ADR-007)** — mutating tool _names_ require approval by default (camelCase-aware),
+   `inheritDefaultEnv:false` opt-in for stdio servers, `allowedHosts` for remote ones, tool responses
+   treated as untrusted model input. The exposed server is **read-only by construction**.
+7. **Webhooks fail closed** — `POST /hooks/:source` HMAC-SHA256 over raw bytes; no `WEBHOOK_SECRET` ⇒
+   every request 401s. Rate limit + signature run as _route-level_ middleware (global middleware is
+   skipped on public routes — gotcha #18).
+
+## 🧠 Memory & RAG
+
+- **All four agents share `buildDomainMemory()`**: observational memory (compaction) + **semantic recall**.
+- **Key-free default**: local `@mastra/fastembed` multilingual E5 (1024d) — recall works with zero API keys;
+  `EMBEDDING_MODEL=openai/text-embedding-3-small` (etc.) upgrades to a hosted embedder.
+- **Degradation is latched, loud-once, and crash-proof**: embedder down ⇒ one canonical warn,
+  `○ Semantic recall off (no embedder)`, plain history — `generate()` unaffected.
+- **Dimension stickiness** (gotcha #12): an index belongs to one dimension forever — the knowledge indexer
+  fail-fasts (`VectorDimensionMismatchError`), Memory's derived index cold-resets. Treat embedder changes as
+  re-index events.
+- **Chat-with-docs in one command**: run the `index-knowledge` workflow on a doc, then ask the research
+  agent — it answers via `search_knowledge` with chunk provenance. Fixture E2E in
+  `tests/integration/knowledge-rag.test.ts`.
+
+## 🔌 MCP
+
+**Consume** external tool servers with one env var (tools are namespaced `server_tool` and routed per agent):
+
+```jsonc
+// MCP_SERVERS — ${VAR} interpolated from the environment
+{
+  "wikipedia": {
+    "command": "npx",
+    "args": ["-y", "wikipedia-mcp"],
+    "inheritDefaultEnv": false,
+    "agents": ["research"],
+  },
+  "weather": {
+    "url": "https://weather.example.com/mcp",
+    "requestInit": { "headers": { "Authorization": "Bearer ${WEATHER_API_KEY}" } },
+    "allowedHosts": ["weather.example.com"],
+    "requireToolApproval": true,
+  },
+}
+```
+
+A server being down degrades to a warn line; malformed JSON fails the boot with an actionable `[MCP] Invalid MCP_SERVERS …`
+message (a present-but-broken value is a config bug, not an absence).
+
+**Expose** the boilerplate itself — read-only by default-off:
 
 ```bash
-cp .env.example .env    # or export in your shell
-# one of:
-DEEPINFRA_API_KEY=***
-OPENAI_API_KEY=***
+ENABLE_MCP_SERVER=true        # HTTP at /api/mcp/boilerplate/mcp (auth-protected when configured)
+npm run mcp:stdio             # Claude Desktop: bundle + stdio (see README block in .env.example)
 ```
 
-### Choose models (any provider mix)
+## 🔀 HTTP surface & streaming
+
+Built-in framework API lives under `/api/*` (auth-protected defaults). **Custom routes are root-level** —
+Mastra 1.66 rejects custom paths starting with `/api` at boot:
+
+| Route                   | Auth                                       | What                                                                          |
+| ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| `POST /hooks/:source`   | HMAC (`x-webhook-signature: sha256=<hex>`) | verifies raw body, publishes exactly one `webhook.received` on the domain bus |
+| `GET /health/version`   | public                                     | `{status, version, env, user}`                                                |
+| `POST /stream/:agentId` | framework default                          | AI-SDK UI-message SSE (`toAISdkStream` v5) for any agent                      |
+
+Frontend wiring without a framework: [`examples/stream-consumer.mjs`](examples/stream-consumer.mjs)
+(`@mastra/client-js`, < 30 LOC). Server-side OTLP tracing: set `OTEL_EXPORTER_OTLP_ENDPOINT` (+ optional
+`@mastra/otel-exporter` companion — resolved by guarded probe, degrades to storage-only).
+
+## 🧪 Testing & CI
 
 ```bash
-MODEL=deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731   # all agents
-MODEL_RESEARCH=anthropic/claude-sonnet-4-5            # per-agent override
+npm run test:all          # smoke → unit → integration → evals (what CI runs)
+npm run test:coverage:gate # + threshold gate: statements/lines ≥74 · branches ≥70 · functions ≥55 (ratchet-only)
+npm run typecheck         # tsc --noEmit, blocking in CI
 ```
 
-## 🔌 API surface (verified live)
+| Tier            | Location                  | Character                                                                                                                                                                                                                                                                              |
+| --------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Smoke**       | `tests/smoke/`            | boots the real composition root with **zero env vars**; asserts instance + agents + workflows + banner rows + MCP/webhook degradation lines                                                                                                                                            |
+| **Unit**        | `tests/unit/`             | deterministic, no network; mirrors source layout (builders, parsers, repo on `:memory:` LibSQL, jail, HMAC golden vectors, fake-clock limiter)                                                                                                                                         |
+| **Integration** | `tests/integration/`      | cross-domain events, Redis pubsub (`skipIf !REDIS_URL`), schedules claim probes, semantic recall/RAG E2E, MCP stdio (exactly-one-subprocess), HITL restart-resume; `RUN_HTTP_TESTS=1` unlocks the in-process HTTP surface suite                                                        |
+| **Evals**       | `tests/evals/`            | **two-tier (spec 07)** — Tier A: native-dataset contracts + keyless _blocking_ gates (code-based scorers over recorded fixtures, `Δ≤0.02` vs committed baseline, `EVAL GATE` throw ⇒ red). Tier B: LLM-judge experiments (`evals-live.yml`, nightly/dispatch — never false-reds forks) |
+| Chaos           | `tests/chaos/api-kill.sh` | manual HA verification: kill API mid-workflow, assert terminal-or-resumable state                                                                                                                                                                                                      |
 
-The Mastra server exposes, among others:
+CI (GitHub Actions, all blocking): `lint` → `typecheck` · `build` (`build:all`, asserts worker artifact) →
+`coverage` → `test-smoke` / `test-unit` / `test-integration` (Postgres 16 + Redis 7 services) / `test-evals`.
 
-| Endpoint | Response |
-|----------|----------|
-| `GET /health` | `{"success":true}` |
-| `GET /api/agents` | the 4 registered agents with metadata |
-| `GET /api/agents/:name` | agent detail (accepts map key or agent id) |
-| `GET /api/workflows` | registered workflows (`deep-research`) with step schemas |
-| `GET /api/tools` | all domain tools (web search/fetch/summarize, task, file, ask-user) |
-| `GET /api/memory/threads` | thread list (storage-backed) |
-| `GET /api/observability/feedback` | feedback list — **read-only-empty on LibSQL, fully supported on PostgreSQL** |
-
-Off-topic messages to a scoped agent return empty text with a `tripwire` redirect (e.g. `"File Operations Agent only handles local file operations... Try instead: Research Agent (...)"`) — proof the guard ran, not an error.
-
-`npm run health-check` probes all of this against a running instance (exit 0 only when server, agents API and workflows API respond).
-
-> Generation calls (`POST /api/agents/:id/generate`) require a provider API key and, for memory-enabled agents, a `memory: { thread, resource }` payload — Studio handles threads automatically. The scope guard needs a key too: without one it fails open (banner line: `Scope guard: inert`).
-
-## 🏗️ Architecture
-
-```text
-src/mastra/
-├── index.ts                  # composition root: registers agents + workflows
-├── domains/                  # vertical slices (never import each other)
-│   ├── research/             #   agent + 3 tools + deep-research workflow + scorer
-│   ├── task-management/      #   agent + 3 tools + Task entity + lifecycle events
-│   ├── file-operations/      #   agent + read/write/edit tools
-│   └── communication/        #   agent + ask-user tool
-└── shared/                   # cross-cutting only
-    ├── config/               #   infrastructure.ts (composition root),
-    │                         #   storage.ts, observability.ts, providers.ts,
-    │                         #   service-status.ts, model.ts, libsql-feedback-compat.ts
-    ├── events/event-bus.ts   #   typed pub/sub for cross-domain flows
-    ├── tools/run-tool.ts     #   typed direct-execute helper for steps/tests
-    └── logger.ts             #   level-filtered logger (LOG_LEVEL)
-```
-
-Cross-domain communication is event-driven (ADR-003, superseded by [ADR-005](docs/adr/005-cross-process-eventing.md): in-process by default, Redis bridge when `REDIS_URL` is set). To add a capability: create a new domain folder, register its agent/workflow in `src/mastra/index.ts`, done — nothing else changes.
-
-### Env-optional services
-
-| Service | Activates with | Without it |
-|---------|----------------|------------|
-| Storage: PostgreSQL | `DATABASE_URL` (`postgres…`) | — |
-| Storage: LibSQL custom | `LIBSQL_URL` | — |
-| Storage: default | — | LibSQL `file:./mastra.db` |
-| Vector store + semantic recall | follows storage (`PgVector`/`LibSQLVector`); embedder = `EMBEDDING_MODEL` or local fastembed E5 (key-free) | `○ … off (no embedder)`; plain history only, `SEMANTIC_RECALL=off` kills it explicitly |
-| Knowledge RAG | embedder available | run `index-knowledge`, then the research agent answers with `search_knowledge` / off with no embedder |
-| PubSub (workers HA) | `REDIS_URL` → Redis Streams | in-process bus; split workers unavailable |
-| Auth (Server & Studio) | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN`) | dev: public + ⚠️ banner line; **prod: refuses to boot** unless `AUTH_DISABLED=true` |
-| Observability | on by default | `ENABLE_OBSERVABILITY=false` disables |
-| Model providers | any `*_API_KEY` | app boots; generation fails clearly |
-| Model selection | `MODEL_<AGENT>` / `MODEL` / `DEFAULT_MODEL` | built-in default |
-
-## 🔌 MCP: consume & expose (ADR-007)
-
-**Inbound** — set `MCP_SERVERS` (JSON, one entry per server, `${VAR}` interpolation for
-secrets). `"agents": ["research"]` routes that server's tools (namespaced `server_tool`) into
-the matching agent. Anything mutating in its name requires human approval by default; a server
-down at boot degrades to a warn line, never a crash. Malformed JSON fails the boot with an
-actionable `[MCP] Invalid MCP_SERVERS …` message. Example:
-
-```json
-{"wikipedia":{"command":"npx","args":["-y","wikipedia-mcp"],"inheritDefaultEnv":false,"agents":["research"]},
- "weather":{"url":"https://weather.example.com/mcp","requestInit":{"headers":{"Authorization":"Bearer ${WEATHER_API_KEY}"}},"allowedHosts":["weather.example.com"],"requireToolApproval":true}}
-```
-
-**Outbound** — `ENABLE_MCP_SERVER=true` registers the **read-only** server at
-`/api/mcp/boilerplate/mcp` (protected by `server.auth` when configured; required outside
-localhost): research + comms agents as `ask_*` tools plus `file-read` (⚠ path exposure —
-reads any file under `WORKSPACE_ROOT`). Workflow exposure is excluded in v1.
-
-**Claude Desktop (stdio)** — `npm run mcp:stdio` (esbuild bundle → `.mastra/mcp-stdio.mjs`;
-plain Node cannot run the TS source's extensionless imports):
-
-```json
-{"mcpServers":{"mastra-boilerplate":{"command":"npm","args":["run","mcp:stdio"],"cwd":"/path/to/project"}}}
-```
-
-Until Spec 06's output detector ships, treat MCP tool results/descriptions as untrusted
-model input — dev-local trust boundary (root AGENTS.md gotcha #15).
-
-## 🧪 Testing
+## 🚢 Deployment & HA
 
 ```bash
-npm run test:all       # smoke → unit → integration → evals (what CI runs)
-npm run test:smoke     # zero-config boot: instance + 4 agents + storage
-npm run test:unit      # deterministic per-component (18)
-npm run test:integration
-npm run test:evals     # structural agent/dataset assertions (offline-safe)
+npm run build:all                     # .mastra/output (API) + .mastra/worker (workers)
+cd docker && docker-compose up -d     # dev: app + PostgreSQL/pgvector
+docker compose -f docker-compose.prod.yml up -d   # HA below
 ```
 
-| Tier | Files | Purpose |
-|------|-------|---------|
-| Smoke | `tests/smoke/` | the whole instance constructs with **zero env vars**; agents/workflow registered |
-| Unit | `tests/unit/` | agents identity, tools behavior, event bus |
-| Integration | `tests/integration/` | cross-domain event flow (Postgres service in CI) |
-| Evals | `tests/evals/` | agent structure + dataset contracts (Mastra Evals-ready layout for live LLM evals) |
-
-Details: `docs/TESTING.md`.
-
-## 🔀 API surface — built-in vs custom
-
-**Built-in (framework, `/api` prefix + auth-protected defaults):** `/api/agents/*`,
-`/api/workflows/*`, `/api/tools/*`, `/api/memory/*`, `/api/observability/*`, and root `/health`
-(compose healthcheck, public by design).
-
-**Custom (this boilerplate, root-level — `/api/*` custom routes throw at boot in Mastra 1.66):**
-
-| Route | Method | Auth | Notes |
-|---|---|---|---|
-| `/hooks/:source` | POST | `requiresAuth:false`; HMAC `x-webhook-signature: sha256=<hex>` | publishes exactly one `webhook.received` on the domain event bus; unset `WEBHOOK_SECRET` ⇒ fail-closed 401 |
-| `/health/version` | GET | `requiresAuth:false` | `{ status, version, env, user }` — `user` reflects Spec 01 auth on the request |
-| `/stream/:agentId` | POST | default (protected once `MASTRA_JWT_SECRET` is set) | AI-SDK UI-message SSE stream (`toAISdkStream`); body `{ messages, memory? }` |
-
-Frontend example with zero glue: `examples/stream-consumer.mjs` (`@mastra/client-js`,
-< 30 LOC). OTLP export: `@mastra/otel-exporter` is the optional companion (+
-`@opentelemetry/exporter-trace-otlp-http|proto|grpc` per protocol). Metrics exist in Mastra
-observability — docs pointer: https://mastra.ai/docs/observability/metrics/overview (out of scope here).
-
-## 📦 Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Mastra dev server + Studio (hot reload) |
-| `npm run build` | production bundle → `.mastra/output/` |
-| `npm run start` | run the built bundle |
-| `npm run init` | full bootstrap: deps + lint + build + tests + git |
-| `npm run lint` | ESLint, **fails on errors or warnings** (`--max-warnings=0`) |
-| `npm run lint:fix` / `format` / `format:check` | Prettier/ESLint writers |
-| `npm run test` / `test:all` / `test:watch` | vitest runners |
-| `npm run health-check` | probe a running instance (server, agents, workflows, storage, keys) |
-| `npm run update` | bump all `@mastra/*` + re-run the quality gate |
-| `npm run deploy:staging` / `deploy:production` | Mastra Platform deploy (needs platform env vars) |
-
-## 🐳 Docker
-
-```bash
-cd docker
-docker-compose up -d                                # dev: app + PostgreSQL/pgvector
-docker-compose -f docker-compose.prod.yml up -d     # HA: api×3, orchestration×2, scheduler×1, background-tasks×2, postgres, redis
+```mermaid
+flowchart LR
+    C[clients] -->|:4111| API
+    subgraph prod ["docker-compose.prod.yml"]
+        API["api ×3<br/>MASTRA_WORKERS=false<br/>CORS · rate-limit · webhooks"]
+        ORCH["orchestration ×2<br/>MASTRA_WORKERS=orchestration"]
+        SCHED["scheduler ×1<br/>(never scale)"]
+        BG["background-tasks ×2<br/>MASTRA_WORKERS=backgroundTasks"]
+        PG[(postgres · pgvector)]
+        RD[(redis 7 · AOF<br/>never host-published)]
+    end
+    ORCH -- "pull events + step-execution<br/>MASTRA_STEP_EXECUTION_URL + bearer" --> API
+    API & ORCH & SCHED & BG --> PG
+    API & ORCH & SCHED & BG --> RD
 ```
 
-Production HA runs a genuinely distributed stack: Redis 7 (AOF; Redis Streams PubSub — never host-exposed) is required for split workers; events cross processes via the bridge (at-least-once, ADR-005); unacknowledged events survive API/Redis restarts; there is no DLQ — stuck runs stay observable in storage. Zero-config `npm run dev` remains untouched.
+Semantics that matter (documented in [docker/AGENTS.md](docker/AGENTS.md) and gotchas #10-#11):
+the domain event bus bridges cross-process **only** when `REDIS_URL` exists; step execution is
+**at-least-once** (handlers should be idempotent; no DLQ); the scheduler must run in exactly one process;
+with `MASTRA_WORKERS=false`, scheduled workflows register but **never fire** (the banner says so).
+Zero-config remains true inside the image — it boots with no env at all.
 
-## 🔄 Auto-update
+**Mastra platform:** `MASTRA_PLATFORM_ACCESS_TOKEN` + `npm run deploy:staging|production`.
 
-- **Renovate** (`.github/renovate.json`): grouped `@mastra/*` update PRs.
-- **`npm run update`**: local one-shot bump with the full gate after.
-- **Weekly codemod job** (`.github/workflows/auto-update.yml`): runs `npx @mastra/codemod@latest` and files an issue when migrations are suggested.
-- Changesets are recommended for release notes: `npx changeset` after user-visible changes.
+## 🔄 Self-updating
 
-Every dependency bump must pass: `npm run lint` → `npx tsc --noEmit` → `npm run test:all` → `npm run build`.
+- **Renovate** — grouped `@mastra/*` PRs (single version-skew-free bump).
+- **`npm run update`** — bumps all Mastra packages, checks `@mastra/codemod`, re-runs the _entire_ gate.
+- **Weekly codemod job** — files an issue when migrations are suggested (never auto-applies).
+- Changesets recommended (`npx changeset`) after user-visible changes; **lockfile stays committed**
+  (`npm ci` + `npm_config_legacy_peer_deps=true` everywhere).
 
-## 🤝 Contributing conventions
+## 🗺️ How this boilerplate was built (roadmap & provenance)
 
-- **Conventional Commits** (`feat:`, `fix:`, `test:`, `docs:`, `chore:`…), imperative, ≤ 72 chars.
-- Branches `feat/<slug>`, `fix/<slug>`; PRs = Summary + Test plan; CI gates must be green to merge.
-- Never hard-code a model string; never bypass the env-optional pattern; use `logger`, not `console`.
-- Full rules: `AGENTS.md` (root) and the per-directory hierarchy linked from its Documentation Hierarchy index.
+Everything above beyond the original core was **spec-driven**, not vibes-driven:
 
-## 📚 Documentation
+1. **[Production gap analysis](docs/PRODUCTION-GAP-ANALYSIS.md)** audited the starter against professional
+   Mastra 1.x deployments — and against its own claims (dead env vars, HA that couldn't work,
+   tools that persisted nothing, an "env-optional multi-region" that did nothing but print).
+2. **[Eight Spec+ phase specs](docs/specs/README.md)** — each with BDD acceptance criteria, a technical
+   contract grounded in the _installed_ dist (not training data), risks, and a DoD that includes the
+   documentation sync it owes. Every draft passed an **independent precision gate**; 7 blockers were
+   caught and fixed before any implementation (e.g. `getTool()` throws on missing keys; the `mastra dev`
+   server-literal extractor; the Redis pending-entry-list trap from unacked bridge deliveries;
+   `/api/*` custom routes being illegal).
+3. **Implementation waves** with disjoint file ownership; composition-root integration done centrally;
+   one conventional commit per phase with its ADR + docs updates inside the same commit.
 
-- `AGENTS.md` — rules, workflows, deployment, self-update, gotchas
-- `docs/adr/` — architecture decision records (vertical slicing, pgvector, event-driven)
-- `docs/TESTING.md` — test tiers and evals
-- `docs/domains/` — per-domain reference notes
+Decisions that shaped the set (D1–D4): one spec per phase · **production fail-fast auth** with a loud dev
+warning · **fastembed-local embeddings by default** (key-free) · **all quality gates blocking** with
+measured coverage floors.
+
+**Anti-filler policy:** voice, channels, browsers, A2A/ACP and sandbox stacks were evaluated and _excluded_ —
+the boilerplate ships only primitives every project needs; vertical features stay documented pointers
+(see gap analysis §4).
+
+## 📚 Official documentation references
+
+Grounded against Mastra 1.x docs at implementation time — canonical sources for anything here:
+
+| Topic                                                           | Doc                                                                                                                                                                                                                                   |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Docs hub · Models & providers                                   | [mastra.ai/docs](https://mastra.ai/docs) · [mastra.ai/models](https://mastra.ai/models)                                                                                                                                               |
+| Agents · Processors/guardrails · HITL                           | [agents/overview](https://mastra.ai/docs/agents/overview) · [agents/processors](https://mastra.ai/docs/agents/processors) · [agents/human-in-the-loop](https://mastra.ai/docs/agents/human-in-the-loop)                               |
+| Workflows · suspend/resume · scheduled                          | [workflows/overview](https://mastra.ai/docs/workflows/overview) · [suspend-and-resume](https://mastra.ai/docs/workflows/suspend-and-resume) · [scheduled-workflows](https://mastra.ai/docs/workflows/scheduled-workflows)             |
+| Memory · semantic recall · observational                        | [memory/overview](https://mastra.ai/docs/memory/overview) · [semantic-recall](https://mastra.ai/docs/memory/semantic-recall)                                                                                                          |
+| MCP · RAG                                                       | [connections/mcp](https://mastra.ai/docs/connections/mcp) · [rag/overview](https://mastra.ai/reference/rag/overview)                                                                                                                  |
+| Auth · Studio auth                                              | [auth/overview](https://mastra.ai/docs/auth/overview) · [studio/auth](https://mastra.ai/docs/studio/auth)                                                                                                                             |
+| Workers · PubSub · custom routes · middleware · request context | [deployment/workers](https://mastra.ai/docs/deployment/workers) · [server/pubsub](https://mastra.ai/docs/server/pubsub) · [server/custom-api-routes](https://mastra.ai/docs/server/custom-api-routes)                                 |
+| Observability · OTLP exporter · metrics                         | [observability/tracing](https://mastra.ai/docs/observability/tracing/overview) · [otel exporter](https://mastra.ai/reference/observability/tracing/exporters/otel) · [metrics](https://mastra.ai/docs/observability/metrics/overview) |
+| Evals · datasets · experiments · gates                          | [evals/overview](https://mastra.ai/docs/evals/overview) · [evals/datasets](https://mastra.ai/docs/evals/datasets)                                                                                                                     |
+| Streaming guide · AI SDK bridge · client SDK                    | [guides/streaming](https://mastra.ai/docs/guides/streaming) · [reference/ai-sdk](https://mastra.ai/reference/ai-sdk/overview) · [client-js](https://mastra.ai/reference/client-js/mastra-client)                                      |
+
+## 🤝 Conventions
+
+- **Branches** `feat/<slug> · fix/<slug> · chore/<slug> · docs/<slug>` · **Conventional Commits** (≤72 chars).
+- Full gate before any commit (`lint · typecheck · test:all · build` + dev boot); after any dependency bump too.
+- `AGENTS.md` hierarchy is **living documentation**: a behavior change without its doc sync is incomplete.
+- ADRs are **append-only** — never edit an accepted ADR; supersede it with a new number.
+- Never hard-code model strings; never `console.*` (logger); every new optional service = its own builder
+  - `ServiceStatus` in both branches + banner + root table row.
+
+## ⚠️ Known caveats (the honest list)
+
+The [19 gotchas](AGENTS.md#environment-gotchas-learned-the-hard-way) are the long form; the top residuals:
+
+- Eval fixtures are labeled **recording stubs** until the first live `evals-live.yml` run regenerates them
+  from real outputs (needs a provider key; baseline stays honest meanwhile).
+- Rate limiter & response cache are **in-process** (per replica); Redis-backed upgrades are documented
+  follow-ups riding spec 02's conventions, deliberately unscoped.
+- Jail keeps an accepted symlink-TOCTOU residual (ADR-009); `WORKSPACE_ROOT` resolves against process CWD.
+- Semantic recall works keyless; **answering** still needs a provider key (`generate()` 401s clearly otherwise).
+- The `ai` package is intentionally _not_ a dependency — the streaming route ships a byte-identical local
+  SSE serializer (swap documented in `routes/stream.ts`).
 
 ## 📄 License
 
-MIT
+MIT — see [LICENSE](LICENSE).
