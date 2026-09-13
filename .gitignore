@@ -1,8 +1,9 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 pnpm-lock.yaml
+# NOTE: package-lock.json IS committed — CI uses `npm ci` (requires it)
+# and a boilerplate must ship reproducible dependency resolution.
 
 # Build outputs
 dist/
