@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# The lockfile is generated with --legacy-peer-deps (@mastra/evals ↔ vitest
+# peer conflict); make `npm ci` use the same resolution everywhere.
+env:
+  npm_config_legacy_peer_deps: 'true'
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -29,6 +34,20 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run build
+
+  test-smoke:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+      - run: npm ci
+      # No env block on purpose: smoke proves zero-config boot (LibSQL fallback,
+      # provider-agnostic model defaults, agent + workflow registration).
+      - run: npm run test:smoke
 
   test-unit:
     runs-on: ubuntu-latest
