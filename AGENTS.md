@@ -59,6 +59,7 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | Storage: LibSQL custom | `LIBSQL_URL` (only if no DATABASE_URL) | — |
 | Storage: default | — | LibSQL local `file:./mastra.db` |
 | PubSub (workers HA) | `REDIS_URL` → Redis Streams (ADR-005; also bridges the domain event bus across processes) | in-process EventEmitterPubSub; split workers unavailable |
+| Auth (Server & Studio) | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN` → worker bearer via CompositeAuth) | dev: inert + ⚠️ UNAUTHENTICATED banner line; **production: FATAL exit(1)** unless `AUTH_DISABLED=true` (ADR-004) |
 | Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
 | Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
 | Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
@@ -110,6 +111,7 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 6. `mastra build` writes to `.mastra/output/`; scripts referencing `dist/` are wrong.
 7. **Agents answer anything unless hard-guarded (real incident 2026-09-13)**: asked "qué pasó en la resurrección de Cristo?", the file-operations agent replied from general knowledge AND hallucinated a `read nonexistent-file` tool call. Positive-only instructions do NOT scope an agent. Fix = `createScopeGuard()` (LLM classifier → `abort()` → TripWire before the model runs; off-topic gets a one-line redirect naming the right agent) + `scopedInstructions()`; guard is on by default (`SCOPE_GUARD=off` to disable) and fails open when no provider key exists (banner shows "Scope guard: inert").
 8. LibSQL does NOT implement the observability **feedback** methods (`listFeedback`, aggregates, write) — Studio's feedback tab 500s without `shared/config/libsql-feedback-compat.ts` being wired into every LibSQL instance. Full feedback surface = PostgreSQL only.
+9. **Auth protects `/api/*` + Studio but NOT root `/health`** — defaults are protected `["/api/*"]`, public `["/api","/api/auth/*"]`, and `/health` lives at root, so the compose healthcheck keeps working unauthenticated. With `NODE_ENV=production` and no auth the process refuses to boot (`MASTRA_JWT_SECRET`, or the explicit `AUTH_DISABLED=true` escape hatch). A custom `server.apiPrefix` breaks those defaults — `buildAuth` rewrites protected/public from `MASTRA_API_PREFIX` and warns; any new root-level route is public by default. Studio login (JWT-capable) = Settings → Headers → `Authorization: Bearer <jwt>`.
 
 ## Development Workflow
 

@@ -9,16 +9,24 @@ import {
   UNAUTHENTICATED_BANNER,
   type AuthConfig,
 } from '../../../../src/mastra/shared/config/auth';
-import { logServiceAvailability, type ServiceStatus } from '../../../../src/mastra/shared/config/service-status';
+import {
+  logServiceAvailability,
+  type ServiceStatus,
+} from '../../../../src/mastra/shared/config/service-status';
 import { logger } from '../../../../src/mastra/shared/logger';
 
-const AUTH_ENV_KEYS = ['MASTRA_JWT_SECRET', 'AUTH_PROVIDER', 'AUTH_DISABLED', 'MASTRA_WORKER_AUTH_TOKEN', 'MASTRA_API_PREFIX'] as const;
+const AUTH_ENV_KEYS = [
+  'MASTRA_JWT_SECRET',
+  'AUTH_PROVIDER',
+  'AUTH_DISABLED',
+  'MASTRA_WORKER_AUTH_TOKEN',
+  'MASTRA_API_PREFIX',
+] as const;
 
 /** Self-contained HS256 signer: proves the JWT branch really verifies tokens
  *  without depending on any transitive JWT package (spec: no transitive imports). */
 function signHs256(payload: Record<string, unknown>, secret: string): string {
-  const encode = (value: unknown) =>
-    Buffer.from(JSON.stringify(value)).toString('base64url');
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
   const head = encode({ alg: 'HS256', typ: 'JWT' });
   const body = encode(payload);
   const signature = createHmac('sha256', secret).update(`${head}.${body}`).digest('base64url');
@@ -62,7 +70,7 @@ describe('buildAuth', () => {
     const provider = auth as IMastraAuthProvider<{ id?: string; sub?: string }>;
     const user = await provider.authenticateToken(
       signHs256({ id: 'user-1', sub: 'user-1' }, 'test-secret-value'),
-      request,
+      request
     );
     expect(user?.id).toBe('user-1');
     expect(provider.mapUserToResourceId?.({ id: 'user-1' })).toBe('user-1');
@@ -100,7 +108,11 @@ describe('buildAuth', () => {
     expect(buildAuth(services)).toBeUndefined();
     expect(warnSpy).toHaveBeenCalledWith(UNAUTHENTICATED_BANNER);
     expect(authStatuses(services)).toEqual([
-      { name: 'Auth', active: false, detail: 'NONE — public. set MASTRA_JWT_SECRET for production' },
+      {
+        name: 'Auth',
+        active: false,
+        detail: 'NONE — public. set MASTRA_JWT_SECRET for production',
+      },
     ]);
   });
 
@@ -122,7 +134,11 @@ describe('buildAuth', () => {
     expect(exitSpy).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('AUTH_DISABLED=true'));
     expect(authStatuses(services)).toEqual([
-      { name: 'Auth', active: false, detail: 'EXPLICITLY DISABLED via AUTH_DISABLED=true — do not ship to prod' },
+      {
+        name: 'Auth',
+        active: false,
+        detail: 'EXPLICITLY DISABLED via AUTH_DISABLED=true — do not ship to prod',
+      },
     ]);
   });
 
@@ -193,9 +209,11 @@ describe('buildAuth', () => {
     logServiceAvailability(services);
 
     const banner = rawSpy.mock.calls[0]?.[0] as string;
-    expect(banner).toContain('○ Auth             NONE — public. set MASTRA_JWT_SECRET for production');
+    expect(banner).toContain(
+      '○ Auth             NONE — public. set MASTRA_JWT_SECRET for production'
+    );
     expect(UNAUTHENTICATED_BANNER).toBe(
-      '⚠️  Server is UNAUTHENTICATED — every /api/* route and Studio are public. Set MASTRA_JWT_SECRET before deploying.',
+      '⚠️  Server is UNAUTHENTICATED — every /api/* route and Studio are public. Set MASTRA_JWT_SECRET before deploying.'
     );
   });
 });

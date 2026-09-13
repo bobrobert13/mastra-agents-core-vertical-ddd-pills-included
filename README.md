@@ -107,6 +107,7 @@ Cross-domain communication is event-driven (ADR-003, superseded by [ADR-005](doc
 | Storage: LibSQL custom | `LIBSQL_URL` | — |
 | Storage: default | — | LibSQL `file:./mastra.db` |
 | PubSub (workers HA) | `REDIS_URL` → Redis Streams | in-process bus; split workers unavailable |
+| Auth (Server & Studio) | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN`) | dev: public + ⚠️ banner line; **prod: refuses to boot** unless `AUTH_DISABLED=true` |
 | Observability | on by default | `ENABLE_OBSERVABILITY=false` disables |
 | Model providers | any `*_API_KEY` | app boots; generation fails clearly |
 | Model selection | `MODEL_<AGENT>` / `MODEL` / `DEFAULT_MODEL` | built-in default |
