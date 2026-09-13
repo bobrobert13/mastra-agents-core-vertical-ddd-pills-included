@@ -10,14 +10,14 @@
 
 | # | Phase | Spec | Lines | Scenarios | Est. impact | Gate history | Status |
 |---|-------|------|-------|-----------|-------------|--------------|--------|
-| 01 | 1 | [auth-server-studio](01-auth-server-studio.md) | 229 | 5 | ~350–400 LOC / 11 files | 0B/6M → fixed | ✅ approved |
-| 02 | 2 | [distributed-pubsub-workers](02-distributed-pubsub-workers.md) | 317 | 5 | ~615 LOC / 18 files | 3B/8M → fixed → re-gate PASS | ✅ approved |
-| 03 | 3 | [vectors-rag-semantic-recall](03-vectors-rag-semantic-recall.md) | 649 | 8 | ~1,350–1,650 LOC / ~26 files | 1B/+9M → fixed → re-gate PASS (+3 nits fixed) | ✅ approved |
-| 04 | 4 | [mcp-connections](04-mcp-connections.md) | 536 | 4 | ~730–800 LOC / 18 files | 2B/8M → fixed → re-gate PASS | ✅ approved |
-| 05 | 5 | [task-persistence-and-schedules](05-task-persistence-and-schedules.md) | 404 | 5 | ~1,300–1,600 LOC / ~20 files | 0B/8M → fixed | ✅ approved |
-| 06 | 6 | [guardrails-and-hitl](06-guardrails-and-hitl.md) | 325 | 6 | ~950–1,250 LOC / ~30 files | 0B/9M → fixed | ✅ approved |
-| 07 | 7 | [evals-ci-quality-gates](07-evals-ci-quality-gates.md) | 278 | 5 | ~950+250 LOC / ~18 files | 1B/8M → fixed (+2 carry-forward) | ✅ approved |
-| 08 | 8 | [custom-routes-streaming-otlp](08-custom-routes-streaming-otlp.md) | 392 | 5 | ~875 LOC / ~26 files | 0B/6M → fixed | ✅ approved |
+| 01 | 1 | [auth-server-studio](01-auth-server-studio.md) | 229 | 5 | ~350–400 LOC / 11 files | 0B/6M → fixed | ✅ **implemented** `d78c8ff` |
+| 02 | 2 | [distributed-pubsub-workers](02-distributed-pubsub-workers.md) | 317 | 5 | ~615 LOC / 18 files | 3B/8M → fixed → re-gate PASS | ✅ **implemented** `60b9d48` |
+| 03 | 3 | [vectors-rag-semantic-recall](03-vectors-rag-semantic-recall.md) | 649 | 8 | ~1,350–1,650 LOC / ~26 files | 1B/+9M → fixed → re-gate PASS | ✅ **implemented** `b9edb8f` |
+| 04 | 4 | [mcp-connections](04-mcp-connections.md) | 536 | 4 | ~730–800 LOC / 18 files | 2B/8M → fixed → re-gate PASS | 🔨 implementing (wave-2) |
+| 05 | 5 | [task-persistence-and-schedules](05-task-persistence-and-schedules.md) | 404 | 5 | ~1,300–1,600 LOC / ~20 files | 0B/8M → fixed | ✅ **implemented** `2cd9764` |
+| 06 | 6 | [guardrails-and-hitl](06-guardrails-and-hitl.md) | 325 | 6 | ~950–1,250 LOC / ~30 files | 0B/9M → fixed | 🔨 implementing (wave-2) |
+| 07 | 7 | [evals-ci-quality-gates](07-evals-ci-quality-gates.md) | 278 | 5 | ~950+250 LOC / ~18 files | 1B/8M → fixed (+2 carry-forward) | 🔨 implementing (wave-2) |
+| 08 | 8 | [custom-routes-streaming-otlp](08-custom-routes-streaming-otlp.md) | 392 | 5 | ~875 LOC / ~26 files | 0B/6M → fixed | 🔨 implementing (wave-2) |
 
 B/M = blockers/minors found by the **independent** precision gate (drafts were also
 self-gated by their authors first). Total: **7 blockers caught and fixed before implementation**
