@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Project-agnostic Mastra boilerplate built on **vertical slicing / DDD**: four example agent domains, infrastructure that is **100% optional and env-driven**, high-availability Docker deployments, comprehensive testing (smoke + unit + integration + evals), and a self-updating toolchain (Renovate + changesets + Mastra codemods). Clone it, delete the example domains you don't need, and start building.
+Project-agnostic Mastra boilerplate built on **vertical slicing / DDD**: four example agent domains plus a workflow-only knowledge slice (chat-with-docs, spec 03), infrastructure that is **100% optional and env-driven**, high-availability Docker deployments, comprehensive testing (smoke + unit + integration + evals), and a self-updating toolchain (Renovate + changesets + Mastra codemods). Clone it, delete the example domains you don't need, and start building.
 
 ## Key Files
 
