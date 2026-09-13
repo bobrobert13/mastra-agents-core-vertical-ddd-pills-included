@@ -7,6 +7,7 @@ import { buildAuth, type AuthConfig } from './auth';
 import { buildVectors, type VectorResolution } from './vectors';
 import type { MCPClient } from '@mastra/mcp';
 import { buildMcpClient } from './mcp';
+import { registerSecurityStackStatus } from '../processors/security-stack';
 import { attachEventBusBridge } from '../events';
 import { detectModelProviders, detectScopeGuard, hasAnyProviderKey } from './providers';
 import type { ServiceStatus, ServiceRegistry } from './service-status';
@@ -42,6 +43,7 @@ export function buildInfrastructure(): Infrastructure {
   const { client: mcpClient } = buildMcpClient(services); // throws on set-but-invalid MCP_SERVERS (fail-fast, spec 04 Sc.2)
   detectModelProviders(services);
   detectScopeGuard(services, hasAnyProviderKey());
+  registerSecurityStackStatus(services, hasAnyProviderKey());
 
   return { storage, vectors, observability, pubsub, auth, mcpClient, services };
 }

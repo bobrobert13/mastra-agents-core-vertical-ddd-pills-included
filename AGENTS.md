@@ -69,6 +69,7 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | Scope guard | on by default (`SCOPE_GUARD_MODEL` optional) | `SCOPE_GUARD=off` disables; inert (fail-open) with no provider key |
 | MCP client (inbound) | `MCP_SERVERS` (JSON; `${VAR}` interpolation; `agents` routing key) | `○ MCP client` off — set `MCP_SERVERS` to connect external servers; set-but-invalid JSON **fails boot** (spec 04) |
 | MCP server (outbound) | `ENABLE_MCP_SERVER=true` (exact string) | `○ MCP server` disabled — read-only surface; requires Spec 01 auth outside localhost |
+| Guardrails (spec 06) | on by default; LLM detectors (injection/PII) need a provider key | `○ Guardrails …` — `SECURITY_PROCESSORS=off` removes all but the scope guard; TokenLimiter/ResponseCache/workspace jail stay active keyless |
 
 At startup the server prints a **service availability banner** (✅ active / ○ inactive per service). Keep it in sync when adding optional services.
 
@@ -77,7 +78,7 @@ At startup the server prints a **service availability banner** (✅ active / ○
 ### Working In This Directory
 - **Vertical slices**: everything a domain needs lives inside its folder. Domains NEVER import from other domains — cross-domain traffic goes through `shared/events/event-bus.ts`.
 - Only truly cross-cutting code goes in `src/mastra/shared/`.
-- **Every `new Agent` MUST be scope-enforced (hard rule, see gotcha #7)**: wire `createScopeGuard(domainScope)` into `inputProcessors` AND build instructions with `scopedInstructions(domainScope, body)` from `shared/processors/scope-guard.ts` / `shared/agents/scoped-instructions.ts`. Positive-only instructions are forbidden — a capable model will otherwise answer anything. Each domain exports its `DomainScope` (plain data; siblings listed without imports).
+- **Every `new Agent` MUST build its processor arrays from `buildSecurityStack(domainScope)` (hard rule, see gotcha #7 + spec 06)**: `inputProcessors` (the scope guard is element 0 inside the stack) AND `outputProcessors`, plus `scopedInstructions(scope, body)` from `shared/agents/scoped-instructions.ts`. Hand-assembling a bare `[scopeGuard]` array or omitting `outputProcessors` violates the rule. Positive-only instructions are forbidden — a capable model will otherwise answer anything. Each domain exports its `DomainScope` (plain data; siblings listed without imports) and its `*SecurityStack` (structural wiring test).
 - Register new agents in `src/mastra/index.ts` (agents map) — and new workflows in its `workflows` map (unregistered workflows stay invisible to `/api/workflows`; this actually happened with `deep-research`). Storage/observability wiring is already automatic.
 - Memory-enabled agents require `memory: { thread, resource }` in raw API generate calls; Studio supplies it automatically.
 - Off-topic input to a scoped agent returns empty text with a `tripwire` reason (the abort redirect) — the guard working, not a bug.
@@ -123,6 +124,8 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 13. **fastembed first run downloads a model** — a multi-hundred-MB ONNX tarball from storage.googleapis.com into `~/.cache/mastra/fastembed-models`. Offline + cold cache ⇒ ONE canonical warn, recall OFF, process survives. Pre-warm CI with `warmup()` from `@mastra/fastembed` + cache-probe `skipIf` (pattern: `tests/integration/semantic-recall.test.ts`). Its native binary dep `@anush008/tokenizers` MUST stay in `bundler.externals` (set in `src/mastra/index.ts`) or `mastra build`/`mastra worker build` die on the `.node` analysis.
 14. **Recall works keyless; ANSWERING doesn't** — zero-key recall stores/recalls vectors fine (local E5), but `generate()` still 401s without a provider API key. Two different degradations with different banner lines — do not conflate them in tests or docs.
 15. **MCP tool responses and tool descriptions are untrusted model input**: `MCP_SERVERS` wires third-party tools into agents without review. Default `requireToolApproval` (`defaultMcpApprovalPolicy`) gates mutating NAMES only (write/edit/delete/remove/drop/create/update incl. camelCase via `toSnake` — `purge_all` dodges it: floor, not ceiling; set `"requireToolApproval": true` wholesale for untrusted servers); `forwardInstructions` stays `false`; the scope guard NEVER inspects tool I/O — Spec 06's `PromptInjectionDetector` is the designated output sanitizer (until then MCP = dev-local trust boundary). The exposed `boilerplate` MCPServer is read-only by construction (ADR-007).
+16. **Guardrail detectors HARD-THROW on guard-model failure** (unlike the fail-open scope guard): `PromptInjectionDetector`/`PIIDetector` require a model and are only mounted with a provider key (`SECURITY_MODEL > guardModel()`). `SECURITY_PROCESSORS=log` is false-positive safety ONLY — an outage still 500s; the only outage-safe switch is `off`. Input processors run ONCE before the loop, so same-run tool output is not rescanned — web-fetch's output-boundary scan (Q3) closes it; other tool sources ride spec 04. `TokenCostControl` throws at REGISTRATION without observability storage → `COST_LIMIT_USD`-only.
+17. **Jail & approvals caveats (spec 06)**: `WORKSPACE_ROOT` resolves against the PROCESS CWD (dev bundles run from `src/mastra/public/` — set an absolute path in prod); the jail is realpath-checked but carries an accepted symlink-TOCTOU residual (ADR-009). Durable/stored agents cannot serialize function-form `requireToolApproval` — boolean only, and `true` there approves EVERY tool call (function form = regular stream/generate only). `ResponseCache` is per-process in-memory (Redis backend = follow-up on spec 02's convention) and its hits REPLAY tool calls without executing — never mount on mutating agents (`disableResponseCache`).
 
 ## Development Workflow
 
@@ -174,28 +177,30 @@ export const myTool = createTool({
 ### Creating an Agent
 ```typescript
 import { Agent } from '@mastra/core/agent';
-import { Memory } from '@mastra/memory';
 import { agentModel, memoryModel } from '../../shared/config/model';
+import { buildDomainMemory } from '../../shared/config/vectors';
+import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import { buildSecurityStack } from '../../shared/processors/security-stack';
+import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 
 export const myScope: DomainScope = {
   domain: 'my-domain', agentName: 'My Agent',
   scope: 'the ONE thing this agent does', outOfScopeExamples: ['...'],
   siblings: [/* the other agents, as plain data */],
 };
-export const myScopeGuard = createScopeGuard(myScope);
+export const myScopeGuard = createScopeGuard(myScope); // kept for compat; the stack owns slot 0
+export const mySecurityStack = buildSecurityStack({ scope: myScope }); // + disableResponseCache:true for mutating agents
 
 export const myAgent = new Agent({
   id: 'my-agent',
   name: 'My Agent',
   instructions: scopedInstructions(myScope, 'You are...'),
-  model: agentModel.research(), /* precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL */
-  inputProcessors: [myScopeGuard], /* hard scope: aborts off-topic BEFORE the LLM */
-  memory: new Memory({
-    options: {
-      observationalMemory: {
-        model: memoryModel(),
-      },
-    },
+  model: agentModel.myDomain(), /* precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL */
+  inputProcessors: mySecurityStack.inputProcessors, /* scope guard = element 0; hard rule */
+  outputProcessors: mySecurityStack.outputProcessors, /* hard rule — never omit */
+  memory: buildDomainMemory({
+    generateTitle: true,
+    observationalMemory: { model: memoryModel() },
   }),
 });
 ```

@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentModel, memoryModel } from '../../shared/config/model';
 import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import { buildSecurityStack } from '../../shared/processors/security-stack';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { createTaskTool } from './tools/create-task';
 import { updateTaskTool } from './tools/update-task';
@@ -25,6 +26,8 @@ export const taskManagementScope: DomainScope = {
 };
 
 export const taskManagementScopeGuard = createScopeGuard(taskManagementScope);
+// Spec 06 hard rule: processor arrays come from buildSecurityStack (scope guard is slot 0).
+export const taskManagementSecurityStack = buildSecurityStack({ scope: taskManagementScope });
 
 export const taskManagementAgent = new Agent({
   id: 'task-management-agent',
@@ -53,7 +56,8 @@ Always be organized and precise with task details.`
     maxSteps: 30,
     autoResumeSuspendedTools: true,
   },
-  inputProcessors: [taskManagementScopeGuard],
+  inputProcessors: taskManagementSecurityStack.inputProcessors,
+  outputProcessors: taskManagementSecurityStack.outputProcessors,
   memory: buildDomainMemory({
     generateTitle: true,
     observationalMemory: {

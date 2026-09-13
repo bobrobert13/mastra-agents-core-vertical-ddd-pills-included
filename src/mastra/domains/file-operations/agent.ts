@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentModel } from '../../shared/config/model';
 import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import { buildSecurityStack } from '../../shared/processors/security-stack';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { readFileTool } from './tools/read-file';
 import { writeFileTool } from './tools/write-file';
@@ -25,6 +26,12 @@ export const fileOperationsScope: DomainScope = {
 };
 
 export const fileOperationsScopeGuard = createScopeGuard(fileOperationsScope);
+// Spec 06 hard rule: processor arrays come from buildSecurityStack (scope guard is slot 0).
+// disableResponseCache: cache hits replay tool calls — mutating agents are excluded (spec 06 R2).
+export const fileOperationsSecurityStack = buildSecurityStack({
+  scope: fileOperationsScope,
+  disableResponseCache: true,
+});
 
 export const fileOperationsAgent = new Agent({
   id: 'file-operations-agent',
@@ -53,7 +60,8 @@ Always be precise and cautious with file operations.`
     maxSteps: 20,
     autoResumeSuspendedTools: true,
   },
-  inputProcessors: [fileOperationsScopeGuard],
+  inputProcessors: fileOperationsSecurityStack.inputProcessors,
+  outputProcessors: fileOperationsSecurityStack.outputProcessors,
   memory: buildDomainMemory({
     generateTitle: true,
   }),

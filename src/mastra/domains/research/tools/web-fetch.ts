@@ -1,6 +1,8 @@
 import { createTool } from '@mastra/core/tools';
+import { TripWire } from '@mastra/core/agent';
 import { z } from 'zod';
 import { logger } from '../../../shared/logger';
+import { scanToolOutputForInjection } from '../../../shared/processors/security-stack';
 
 export const webFetchTool = createTool({
   id: 'research-web-fetch',
@@ -43,12 +45,23 @@ export const webFetchTool = createTool({
       // For summary mode, take first 1000 characters
       const content = extractMode === 'summary' ? text.substring(0, 1000) : text;
 
+      // Spec 06 Q3 (DECIDED, option b): scanning boundary at the web-fetch
+      // tool-output path — the injected-content gap Scenario 1 documents
+      // (PromptInjectionDetector's processInput runs ONCE before the loop, so
+      // content fetched during the current run is never rescanned). The
+      // extracted text is checked BEFORE it enters the agentic loop as a tool
+      // result. Inert without a provider key / with SECURITY_PROCESSORS=off
+      // (same rule as the stack's slot 2).
+      await scanToolOutputForInjection(content, url);
+
       return {
         content,
         title,
         wordCount: text.split(/\s+/).length,
       };
     } catch (error) {
+      // A flagged payload (TripWire) must surface intact, not as a fetch error.
+      if (error instanceof TripWire) throw error;
       logger.error('Web fetch error:', error);
       throw new Error(`Failed to fetch URL: ${error}`, { cause: error });
     }

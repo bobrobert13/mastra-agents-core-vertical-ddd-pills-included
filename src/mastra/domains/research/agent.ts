@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentModel, memoryModel } from '../../shared/config/model';
 import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import { buildSecurityStack } from '../../shared/processors/security-stack';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { webSearchTool } from './tools/web-search';
 import { webFetchTool } from './tools/web-fetch';
@@ -26,6 +27,8 @@ export const researchScope: DomainScope = {
 };
 
 export const researchScopeGuard = createScopeGuard(researchScope);
+// Spec 06 hard rule: processor arrays come from buildSecurityStack (scope guard is slot 0).
+export const researchSecurityStack = buildSecurityStack({ scope: researchScope });
 
 export const researchAgent = new Agent({
   id: 'research-agent',
@@ -55,7 +58,8 @@ External (MCP) tools available to you may only be used for this agent's research
     maxSteps: 50,
     autoResumeSuspendedTools: true,
   },
-  inputProcessors: [researchScopeGuard],
+  inputProcessors: researchSecurityStack.inputProcessors,
+  outputProcessors: researchSecurityStack.outputProcessors,
   memory: buildDomainMemory({
     generateTitle: true,
     observationalMemory: {

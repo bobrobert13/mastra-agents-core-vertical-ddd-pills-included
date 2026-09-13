@@ -2,6 +2,7 @@ import { Agent } from '@mastra/core/agent';
 import { agentModel } from '../../shared/config/model';
 import { buildDomainMemory } from '../../shared/config/vectors';
 import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import { buildSecurityStack } from '../../shared/processors/security-stack';
 import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { askUserTool } from './tools/ask-user';
 
@@ -22,6 +23,8 @@ export const communicationScope: DomainScope = {
 };
 
 export const communicationScopeGuard = createScopeGuard(communicationScope);
+// Spec 06 hard rule: processor arrays come from buildSecurityStack (scope guard is slot 0).
+export const communicationSecurityStack = buildSecurityStack({ scope: communicationScope });
 
 export const communicationAgent = new Agent({
   id: 'communication-agent',
@@ -49,7 +52,8 @@ Always prioritize clear, effective communication.`
     maxSteps: 10,
     autoResumeSuspendedTools: true,
   },
-  inputProcessors: [communicationScopeGuard],
+  inputProcessors: communicationSecurityStack.inputProcessors,
+  outputProcessors: communicationSecurityStack.outputProcessors,
   memory: buildDomainMemory({
     generateTitle: true,
   }),
