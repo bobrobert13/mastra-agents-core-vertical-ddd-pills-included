@@ -58,3 +58,4 @@ temp/
 
 # Better Harness run artifacts
 .qoder/better-harness-runs/
+.codegraph/
