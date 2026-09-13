@@ -11,7 +11,7 @@ This document outlines the comprehensive testing strategy for the Mastra boilerp
         │   Human     │  ← Quarterly
         │ Evaluation  │
         ├─────────────┤
-        │  LLM-based  │  ← Nightly
+        │  LLM-based  │  ← Nightly (live evals, roadmap)
         │   Scorers   │
         ├─────────────┤
         │ Integration │  ← Every PR
@@ -19,10 +19,26 @@ This document outlines the comprehensive testing strategy for the Mastra boilerp
         ├─────────────┤
         │ Unit Tests  │  ← Every commit
         │ + Gates     │
+        ├─────────────┤
+        │ Smoke /     │  ← Every commit: zero-config
+        │ Boot        │     instance construction
         └─────────────┘
 ```
 
 ## 🧪 Test Types
+
+### 0. Smoke Tests
+
+**Purpose**: Prove the boilerplate's core promise — the entire Mastra instance constructs with **zero env vars** (LibSQL fallback storage, provider-agnostic model defaults) and registers all domains + workflows. Deterministic and offline: no model calls.
+
+**Location**: `tests/smoke/boots.test.ts` (importing `src/mastra/index.ts` runs the real composition root)
+
+**Run**:
+```bash
+npm run test:smoke
+```
+
+**What it asserts**: `listAgents()` exposes exactly `research/tasks/files/comms`; each agent has id, name and a resolved model string; `getStorage()` is defined.
 
 ### 1. Unit Tests
 
@@ -70,9 +86,7 @@ npm run test:unit
 **Structure**:
 ```
 tests/integration/
-├── cross-domain.test.ts
-├── workflows.test.ts
-└── event-flow.test.ts
+└── cross-domain.test.ts
 ```
 
 **Run**:
@@ -86,9 +100,9 @@ npm run test:integration
 - Multi-agent collaboration
 - Database interactions
 
-### 3. E2E Evaluations (Mastra Evals)
+### 3. Structural Evals (Mastra Evals-ready)
 
-**Purpose**: LLM-based quality evaluation with gates and scorers
+**Purpose**: Assert agent contracts (identity, model resolution via `shared/config/model.ts`) and dataset schemas. **Offline-safe** — no model calls, so CI is green without provider keys. To grow these into live LLM evals, wire the datasets into `@mastra/evals` scorers behind a `describe.skipIf(!hasKey)` guard.
 
 **Location**: `tests/evals/`
 
@@ -97,11 +111,9 @@ npm run test:integration
 tests/evals/
 ├── datasets/
 │   ├── research-dataset.json
-│   ├── task-dataset.json
-│   └── file-dataset.json
+│   └── task-dataset.json
 ├── research.eval.test.ts
-├── task-management.eval.test.ts
-└── file-operations.eval.test.ts
+└── task-management.eval.test.ts
 ```
 
 **Run**:
@@ -217,42 +229,18 @@ await dataset.addItems({
 
 ### GitHub Actions
 
-```yaml
-name: Tests
-on: [push, pull_request]
+Real pipeline: `.github/workflows/ci.yml` (source of truth — keep this summary in sync).
 
-jobs:
-  test-unit:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-      - run: npm ci
-      - run: npm run test:unit
-  
-  test-integration:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm ci
-      - run: npm run test:integration
-  
-  test-evals:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - run: npm ci
-      - run: npm run test:evals
-        env:
-          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
-```
+| Job | Runs | Notes |
+|---|---|---|
+| `lint` | `npm run lint` | ESLint with `--max-warnings=0` (0 errors / 0 warnings enforced) |
+| `build` | `npm run build` | needs lint |
+| `test-smoke` | `npm run test:smoke` | **no env block on purpose** — proves zero-config boot |
+| `test-unit` | `npm run test:unit` | deterministic |
+| `test-integration` | `npm run test:integration` | Postgres 16 service + `DATABASE_URL` |
+| `test-evals` | `npm run test:evals` | structural, offline-safe; optional `DEEPINFRA_API_KEY` secret |
+
+Workflow-level `env: npm_config_legacy_peer_deps: 'true'` makes `npm ci` match the committed lockfile's resolution (see root `AGENTS.md` gotcha #1).
 
 ## 📈 Coverage Goals
 
@@ -265,13 +253,17 @@ jobs:
 ## 🛠️ Commands
 
 ```bash
-# Run all tests
+# Run all tests (smoke → unit → integration → evals)
 npm run test:all
 
 # Run specific test suites
+npm run test:smoke
 npm run test:unit
 npm run test:integration
 npm run test:evals
+
+# Type check (covers src + tests, like CI's implicit gate)
+npx tsc --noEmit
 
 # Watch mode
 npm run test:watch

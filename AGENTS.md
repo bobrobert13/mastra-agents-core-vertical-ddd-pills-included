@@ -3,7 +3,7 @@
 
 ## Purpose
 
-Project-agnostic Mastra boilerplate built on **vertical slicing / DDD**: four example agent domains, infrastructure that is **100% optional and env-driven**, high-availability Docker deployments, comprehensive testing (unit + integration + LLM evals), and a self-updating toolchain (Renovate + changesets + Mastra codemods). Clone it, delete the example domains you don't need, and start building.
+Project-agnostic Mastra boilerplate built on **vertical slicing / DDD**: four example agent domains, infrastructure that is **100% optional and env-driven**, high-availability Docker deployments, comprehensive testing (smoke + unit + integration + evals), and a self-updating toolchain (Renovate + changesets + Mastra codemods). Clone it, delete the example domains you don't need, and start building.
 
 ## Key Files
 
@@ -51,7 +51,7 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 
 ## How It Works — Optional Infrastructure
 
-**Rule: no env var ⇒ no error, the service is simply inactive.** All of it lives in `src/mastra/shared/config/infrastructure.ts`:
+**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `observability.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts`):
 
 | Service | Activated by | Fallback when unset |
 |---------|-------------|---------------------|
@@ -62,6 +62,7 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
 | Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
 | Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
+| Scope guard | on by default (`SCOPE_GUARD_MODEL` optional) | `SCOPE_GUARD=off` disables; inert (fail-open) with no provider key |
 
 At startup the server prints a **service availability banner** (✅ active / ○ inactive per service). Keep it in sync when adding optional services.
 
@@ -70,22 +71,26 @@ At startup the server prints a **service availability banner** (✅ active / ○
 ### Working In This Directory
 - **Vertical slices**: everything a domain needs lives inside its folder. Domains NEVER import from other domains — cross-domain traffic goes through `shared/events/event-bus.ts`.
 - Only truly cross-cutting code goes in `src/mastra/shared/`.
-- Register new agents in `src/mastra/index.ts` (agents map) — storage/observability wiring is already automatic.
+- **Every `new Agent` MUST be scope-enforced (hard rule, see gotcha #7)**: wire `createScopeGuard(domainScope)` into `inputProcessors` AND build instructions with `scopedInstructions(domainScope, body)` from `shared/processors/scope-guard.ts` / `shared/agents/scoped-instructions.ts`. Positive-only instructions are forbidden — a capable model will otherwise answer anything. Each domain exports its `DomainScope` (plain data; siblings listed without imports).
+- Register new agents in `src/mastra/index.ts` (agents map) — and new workflows in its `workflows` map (unregistered workflows stay invisible to `/api/workflows`; this actually happened with `deep-research`). Storage/observability wiring is already automatic.
+- Memory-enabled agents require `memory: { thread, resource }` in raw API generate calls; Studio supplies it automatically.
+- Off-topic input to a scoped agent returns empty text with a `tripwire` reason (the abort redirect) — the guard working, not a bug.
 - **Never hard-code infra requirements**: new services must follow the env-optional pattern above and report status in the banner.
 
 ### Testing Requirements (before any commit)
 ```bash
-npm run lint          # must be 0 errors / 0 warnings
-npm run test:all      # unit + integration + evals
-npm run build         # outputs .mastra/output/ (NOT dist/)
-timeout 15 npm run dev   # verify boot + banner, then kill
+npm run lint             # eslint src --max-warnings=0 → 0 errors / 0 warnings
+npx tsc --noEmit         # covers src + tests
+npm run test:all         # smoke → unit → integration → evals
+npm run build            # outputs .mastra/output/ (NOT dist/)
+timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 ```
 
 ### GitHub Conventions
 - **Commits**: Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `test:`, `ci:`). Subject ≤ 72 chars, imperative mood, body only when the *why* isn't obvious.
 - **Branches**: `feat/<slug>`, `fix/<slug>`, `chore/<slug>`, `docs/<slug>`.
 - **PRs**: title follows commit convention; description = Summary bullets + Test plan checklist.
-- **CI gates** (`.github/workflows/ci.yml`): lint, build, test-unit, test-integration, test-evals. A PR is mergeable only when all pass.
+- **CI gates** (`.github/workflows/ci.yml`): lint, build, test-smoke, test-unit, test-integration, test-evals. A PR is mergeable only when all pass. `package-lock.json` **must stay committed** (jobs use `npm ci` + workflow-level `npm_config_legacy_peer_deps=true`).
 - Do not commit `.env`, `*.db*`, `.mastra/`, `node_modules/` (already gitignored).
 
 ### Updating Dependencies (self-update system)
@@ -103,13 +108,14 @@ timeout 15 npm run dev   # verify boot + banner, then kill
 4. `@mastra/core/scores` does not exist in current version — scorers use the per-domain pattern in `research/scorers/`.
 5. **Never hard-code a model string** — always `agentModel.<key>()` / `memoryModel()` from `shared/config/model.ts` (`provider/model-id` format, e.g. `deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731`, `anthropic/claude-sonnet-4-5`, `ollama/llama3.1`).
 6. `mastra build` writes to `.mastra/output/`; scripts referencing `dist/` are wrong.
-7. LibSQL does NOT implement the observability **feedback** methods (`listFeedback`, aggregates, write) — Studio's feedback tab 500s without `shared/config/libsql-feedback-compat.ts` being wired into every LibSQL instance. Full feedback surface = PostgreSQL only.
+7. **Agents answer anything unless hard-guarded (real incident 2026-09-13)**: asked "qué pasó en la resurrección de Cristo?", the file-operations agent replied from general knowledge AND hallucinated a `read nonexistent-file` tool call. Positive-only instructions do NOT scope an agent. Fix = `createScopeGuard()` (LLM classifier → `abort()` → TripWire before the model runs; off-topic gets a one-line redirect naming the right agent) + `scopedInstructions()`; guard is on by default (`SCOPE_GUARD=off` to disable) and fails open when no provider key exists (banner shows "Scope guard: inert").
+8. LibSQL does NOT implement the observability **feedback** methods (`listFeedback`, aggregates, write) — Studio's feedback tab 500s without `shared/config/libsql-feedback-compat.ts` being wired into every LibSQL instance. Full feedback surface = PostgreSQL only.
 
 ## Development Workflow
 
 ### Adding a New Domain
-1. Create `src/mastra/domains/<domain-name>/` with `agent.ts`, `tools/`, optional `workflows/`, `scorers/`, `entities/`, `events.ts`, `index.ts` (barrel exports).
-2. Register agent in `src/mastra/index.ts`.
+1. Create `src/mastra/domains/<domain-name>/` with `agent.ts` (scope + guard wired — see gotcha #7), `tools/`, optional `workflows/`, `scorers/`, `entities/`, `events.ts`, `index.ts` (barrel exports the agent, `*Scope` and `*ScopeGuard`).
+2. Register agent (and any workflow) in the `agents`/`workflows` maps of `src/mastra/index.ts`.
 3. Add `tests/unit/domains/<domain>/`, `tests/evals/<domain>.eval.test.ts`.
 4. Document in `docs/domains/<domain>.md` and add an `AGENTS.md` for the domain folder.
 
@@ -120,10 +126,11 @@ timeout 15 npm run dev   # verify boot + banner, then kill
 
 ### Running Tests
 ```bash
-npm run test:all        # everything
+npm run test:all        # smoke → unit → integration → evals
+npm run test:smoke      # zero-config boot of the real instance
 npm run test:unit       # fast deterministic
 npm run test:integration
-npm run test:evals      # LLM-based, needs a provider API key
+npm run test:evals      # structural today (offline-safe), live when skipIf-guarded
 npm run test:unit -- domains/research   # one area
 ```
 
@@ -157,11 +164,19 @@ import { Agent } from '@mastra/core/agent';
 import { Memory } from '@mastra/memory';
 import { agentModel, memoryModel } from '../../shared/config/model';
 
+export const myScope: DomainScope = {
+  domain: 'my-domain', agentName: 'My Agent',
+  scope: 'the ONE thing this agent does', outOfScopeExamples: ['...'],
+  siblings: [/* the other agents, as plain data */],
+};
+export const myScopeGuard = createScopeGuard(myScope);
+
 export const myAgent = new Agent({
   id: 'my-agent',
   name: 'My Agent',
-  instructions: 'You are...',
-  model: agentModel.research(), // precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL
+  instructions: scopedInstructions(myScope, 'You are...'),
+  model: agentModel.research(), /* precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL */
+  inputProcessors: [myScopeGuard], /* hard scope: aborts off-topic BEFORE the LLM */
   memory: new Memory({
     options: {
       observationalMemory: {
@@ -211,7 +226,7 @@ Mastra Platform (optional): set `MASTRA_PLATFORM_ACCESS_TOKEN`, `MASTRA_PROJECT_
 
 ## Troubleshooting
 
-- **"This storage provider does not support listing feedback" (Studio, LibSQL mode)** ⇒ the compat shim in `src/mastra/shared/config/libsql-feedback-compat.ts` must be wired (it is, via `createLibSQLStorage` in `infrastructure.ts`). LibSQL persists only spans/traces; the full feedback surface (write + analytics) requires PostgreSQL `DATABASE_URL`.
+- **"This storage provider does not support listing feedback" (Studio, LibSQL mode)** ⇒ the compat shim in `src/mastra/shared/config/libsql-feedback-compat.ts` must be wired (it is, via `createLibSQLStorage` in `config/storage.ts`). LibSQL persists only spans/traces; the full feedback surface (write + analytics) requires PostgreSQL `DATABASE_URL`.
 - **DB connection (SASL/auth) errors** ⇒ bad `DATABASE_URL`; app intentionally falls back to nothing else — unset it for LibSQL dev mode.
 - **HTTP 400 from a tool** ⇒ likely a built-in tool with an unsupported provider; write a custom tool.
 - **Port 4111 busy** ⇒ `pkill -f "mastra dev"`; the dev user controls server lifecycle.

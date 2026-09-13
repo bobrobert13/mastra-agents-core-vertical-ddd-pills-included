@@ -10,7 +10,7 @@ Human decision record: Architecture Decision Records, per-domain completion docs
 
 | File | Description |
 |------|-------------|
-| `TESTING.md` | How the three test tiers + evals are run and gated |
+| `TESTING.md` | The four test tiers (smoke/unit/integration/evals) + real CI job table |
 
 ## Subdirectories
 
@@ -23,7 +23,7 @@ Human decision record: Architecture Decision Records, per-domain completion docs
 
 ### Working In This Directory
 - **New architectural decision ⇒ new ADR file, never edit accepted ADRs**; supersede them with a new numbered record instead.
-- When infra optionality changes (`shared/config/infrastructure.ts`), update the affected ADR context section via a new ADR or an `Updated:` line, and keep root `AGENTS.md`'s service table in sync.
+- When infra optionality changes (`shared/config/storage.ts`/`observability.ts`/`providers.ts` wired via `infrastructure.ts`), update the affected ADR context section via a new ADR or an `Updated:` line, and keep root `AGENTS.md`'s service table in sync.
 - Docs are English (repo language) even though conversation may be Spanish.
 
 <!-- MANUAL: -->

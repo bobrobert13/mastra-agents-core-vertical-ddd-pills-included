@@ -10,9 +10,10 @@ Three-tier test pyramid: deterministic unit tests, cross-domain integration test
 
 | Directory | Purpose |
 |-----------|---------|
+| `smoke/` | Zero-config boot of the real composition root (`src/mastra/index.ts`): instance constructs with no env vars, 4 agents + workflow registered. Never add model calls here. |
 | `unit/` | Fast, no network. `unit/domains/<domain>/` mirrors source layout; `unit/shared/event-bus.test.ts` |
 | `integration/` | `cross-domain.test.ts` — boots domains together, asserts event flow between them |
-| `evals/` | `research.eval.test.ts`, `task-management.eval.test.ts` — call a real model; need a provider API key and are gated separately in CI |
+| `evals/` | `research.eval.test.ts`, `task-management.eval.test.ts` — currently **structural** (identity/model/dataset contracts, offline-safe); live LLM evals are an upgrade path guarded by `describe.skipIf` |
 
 ## Key Files
 
@@ -27,13 +28,14 @@ Three-tier test pyramid: deterministic unit tests, cross-domain integration test
 ### Working In This Directory
 - Import paths from `tests/**` to source need correct `../` depth (this burned us once: `../../../../src/...` vs `../../../../../src/...`). Verify with a single test run before assuming.
 - Never assert on non-public Agent internals.
-- Evals must be skippable when no API key is present (`describe.skipIf` pattern) so `test:unit`/`test:integration` stay hermetic.
+- If evals ever make live model calls, they MUST be guarded by `describe.skipIf(!hasProviderKey())` so the tier stays offline-safe by default.
 
 ### Testing Requirements
 ```bash
+npm run test:smoke         # zero-config boot (no env, no network)
 npm run test:unit          # always green offline
 npm run test:integration
-npm run test:evals         # requires any provider API key from .env
+npm run test:evals         # structural today; skipIf-guarded when live calls are added
 ```
 
 <!-- MANUAL: -->

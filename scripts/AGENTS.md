@@ -4,20 +4,20 @@
 
 ## Purpose
 
-Operator-facing bash scripts wired to npm scripts (`init`, `health-check`, `update`). All are `set -e` and executable.
+Operator-facing bash scripts wired to npm scripts (`init`, `health-check`, `update`). All executable; every `npm install` uses `--legacy-peer-deps`.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `init.sh` | First-run bootstrap: installs deps (`--legacy-peer-deps`), copies `.env.example` → `.env` if missing, runs checks |
-| `health-check.sh` | Probes running instance (`/health` endpoints on MASTRA_PORT, default 4111), color-coded pass/fail |
-| `update-mastra.sh` | Bumps all `@mastra/*` packages to latest and re-runs the test gate |
+| `init.sh` | Full bootstrap: Node check → deps (`--legacy-peer-deps`) → optional `.env` → lint + build + smoke/unit/integration → git init |
+| `health-check.sh` | 7 live probes on `MASTRA_PORT` (default 4111): `/health`, `/api/agents` (≥4), `/api/workflows` (deep-research), storage mode, provider keys, layout, deps. Missing `.env`/keys are warnings; exit 0 only when the instance is healthy |
+| `update-mastra.sh` | Bumps all 7 Mastra packages (`@latest --legacy-peer-deps`), checks codemods (never auto-applies), re-runs full gate (lint + tsc + test:all + build) |
 
 ## For AI Agents
 
 ### Working In This Directory
-- Scripts must remain **zero-config safe**: absence of `.env`/DB must not fail `init.sh`.
+- Scripts must remain **zero-config safe**: absence of `.env`/DB/API keys must not fail `init.sh` or `health-check.sh` (warnings, not errors).
 - Keep npm-script names stable (`npm run init|health-check|update`) — CI and docs reference them.
 
 <!-- MANUAL: -->

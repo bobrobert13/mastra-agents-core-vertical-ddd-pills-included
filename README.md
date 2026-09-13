@@ -1,251 +1,183 @@
 # Mastra Boilerplate
 
-Self-updating Mastra boilerplate with vertical slicing architecture, high availability, and comprehensive testing.
+Project-agnostic starter for AI agents built on [Mastra](https://mastra.ai): vertical-slicing architecture, **zero-config boot**, provider-agnostic models, high-availability Docker deployments, layered testing, CI/CD and a self-updating dependency pipeline.
 
 ## 🎯 Features
 
-- **Vertical Slicing Architecture**: Domain-driven design with maximum cohesion
-- **High Availability**: Docker Compose with separated workers (API, Orchestration, Scheduler, Background)
-- **PostgreSQL + pgvector**: Production-ready database with vector support for RAG
-- **Multi-Region Support**: Configurable via environment variables
-- **Comprehensive Testing**: Unit, integration, and E2E tests with Mastra Evals
-- **Auto-Update**: Renovate + changesets for automatic dependency updates
-- **Observability**: Built-in tracing, logging, and metrics
-- **Example Domains**: 4 reference domains (research, task-management, file-operations, communication)
+- **Zero-config boot** — clone → `npm install --legacy-peer-deps` → `npm run dev`. No database, no API key, no `.env` required; every infrastructure dependency activates only when its env var exists (see the startup service banner).
+- **Vertical Slicing / DDD** — 4 reference domains (research, task-management, file-operations, communication), each self-contained: agent, tools, workflows, scorers, entities, events. Domains never import each other; cross-domain traffic goes through a typed event bus.
+- **Provider-agnostic models** — no model string is hard-coded. Choose via env: `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL` (any `provider/model-id` the [Mastra model router](https://mastra.ai/models) supports).
+- **Scope-dedicated agents** — every domain agent is hard-guarded: an LLM classifier aborts off-topic input *before the model runs* and answers with a one-line redirect to the right agent (instructions template + `createScopeGuard`; `SCOPE_GUARD=off` disables, inert without a key).
+- **Env-optional infrastructure** — PostgreSQL (+pgvector for future RAG) with LibSQL fallback, multi-region replication toggle, observability with storage exporter and sensitive-data filter.
+- **High Availability** — multi-stage Dockerfile and a production compose with separated workers (API / orchestration / scheduler / background / PostgreSQL).
+- **Layered testing** — smoke (zero-config boot), unit, cross-domain integration, structural evals; enforced in CI on every push/PR.
+- **Self-updating** — Renovate PRs, `npm run update` (all `@mastra/*` bumped + full gate), weekly Mastra codemod job.
+- **Hierarchical agent docs** — 15 `AGENTS.md` files documenting rules, deploys, conventions and gotchas for AI coding agents.
 
 ## 📋 Prerequisites
 
-- Node.js 22.13.0 or later
-- PostgreSQL 16+ with pgvector extension
-- npm or yarn
+- Node.js **≥ 22.13** (`engines` in package.json)
+- Nothing else. PostgreSQL/Docker/API keys are **optional** enhancements.
 
-## 🚀 Quick Start
-
-### 1. Initialize the project
+## 🚀 Quick start
 
 ```bash
-# Clone or create the project
-git clone <your-repo-url>
-cd mastra-boilerplate
-
-# Run initialization script
-npm run init
+npm install --legacy-peer-deps   # @mastra/evals ↔ vitest peer conflict (see AGENTS.md gotcha #1)
+npm run dev                      # Studio: http://localhost:4111
 ```
 
-### 2. Configure environment
+The terminal prints a **service availability banner** — e.g. on a fresh clone:
+
+```text
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 Mastra Boilerplate — service availability
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Environment: development
+✅ Storage          LibSQL local file:./mastra.db — feedback read-only (set DATABASE_URL for PostgreSQL)
+✅ Observability    traces stored in configured storage (set ENABLE_OBSERVABILITY=false to disable)
+○ Model providers  no API keys found — set a provider key (see .env.example)
+Agents: research, tasks, files, comms
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+```
+
+Optional full bootstrap (deps + lint + build + tests + git init): `npm run init`.
+
+### Enable a model provider
 
 ```bash
-# Edit .env with your credentials
-nano .env
+cp .env.example .env    # or export in your shell
+# one of:
+DEEPINFRA_API_KEY=***
+OPENAI_API_KEY=***
 ```
 
-Required:
-- `DEEPINFRA_API_KEY` (or other model provider keys)
-- `DATABASE_URL` (PostgreSQL connection string)
-- `MASTRA_JWT_SECRET` (for API authentication)
-
-### 3. Start PostgreSQL
+### Choose models (any provider mix)
 
 ```bash
-cd docker
-docker-compose up -d postgres
+MODEL=deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731   # all agents
+MODEL_RESEARCH=anthropic/claude-sonnet-4-5            # per-agent override
 ```
 
-### 4. Run migrations
+## 🔌 API surface (verified live)
 
-```bash
-npm run migrate
-```
+The Mastra server exposes, among others:
 
-### 5. Start development server
+| Endpoint | Response |
+|----------|----------|
+| `GET /health` | `{"success":true}` |
+| `GET /api/agents` | the 4 registered agents with metadata |
+| `GET /api/agents/:name` | agent detail (accepts map key or agent id) |
+| `GET /api/workflows` | registered workflows (`deep-research`) with step schemas |
+| `GET /api/tools` | all domain tools (web search/fetch/summarize, task, file, ask-user) |
+| `GET /api/memory/threads` | thread list (storage-backed) |
+| `GET /api/observability/feedback` | feedback list — **read-only-empty on LibSQL, fully supported on PostgreSQL** |
 
-```bash
-npm run dev
-```
+Off-topic messages to a scoped agent return empty text with a `tripwire` redirect (e.g. `"File Operations Agent only handles local file operations... Try instead: Research Agent (...)"`) — proof the guard ran, not an error.
 
-Visit http://localhost:4111 for Mastra Studio.
+`npm run health-check` probes all of this against a running instance (exit 0 only when server, agents API and workflows API respond).
+
+> Generation calls (`POST /api/agents/:id/generate`) require a provider API key and, for memory-enabled agents, a `memory: { thread, resource }` payload — Studio handles threads automatically. The scope guard needs a key too: without one it fails open (banner line: `Scope guard: inert`).
 
 ## 🏗️ Architecture
 
-### Vertical Slicing
-
-The project is organized by business domains, not technical layers:
-
-```
+```text
 src/mastra/
-├── domains/
-│   ├── research/          # Web research domain
-│   │   ├── agent.ts
-│   │   ├── tools/
-│   │   ├── workflows/
-│   │   └── scorers/
-│   ├── task-management/   # Task management domain
-│   ├── file-operations/   # File operations domain
-│   └── communication/     # Communication domain
-├── shared/                # Cross-domain utilities
-└── infrastructure/        # Database, observability, external services
+├── index.ts                  # composition root: registers agents + workflows
+├── domains/                  # vertical slices (never import each other)
+│   ├── research/             #   agent + 3 tools + deep-research workflow + scorer
+│   ├── task-management/      #   agent + 3 tools + Task entity + lifecycle events
+│   ├── file-operations/      #   agent + read/write/edit tools
+│   └── communication/        #   agent + ask-user tool
+└── shared/                   # cross-cutting only
+    ├── config/               #   infrastructure.ts (composition root),
+    │                         #   storage.ts, observability.ts, providers.ts,
+    │                         #   service-status.ts, model.ts, libsql-feedback-compat.ts
+    ├── events/event-bus.ts   #   typed pub/sub for cross-domain flows
+    ├── tools/run-tool.ts     #   typed direct-execute helper for steps/tests
+    └── logger.ts             #   level-filtered logger (LOG_LEVEL)
 ```
 
-### High Availability
+Cross-domain communication is event-driven (`docs/adr/003-event-driven.md`). To add a capability: create a new domain folder, register its agent/workflow in `src/mastra/index.ts`, done — nothing else changes.
 
-Production deployment uses separated workers:
+### Env-optional services
 
-```
-┌─────────────┐     ┌──────────────────┐
-│   API       │────▶│  Orchestration   │
-│  (3 reps)   │     │    (2 reps)      │
-└─────────────┘     └──────────────────┘
-                            │
-       ┌────────────────────┼────────────────────┐
-       ▼                    ▼                    ▼
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│  Scheduler  │     │  Background │     │  PostgreSQL │
-│  (1 rep)    │     │   (2 reps)  │     │  (pgvector) │
-└─────────────┘     └─────────────┘     └─────────────┘
-```
+| Service | Activates with | Without it |
+|---------|----------------|------------|
+| Storage: PostgreSQL | `DATABASE_URL` (`postgres…`) | — |
+| Storage: LibSQL custom | `LIBSQL_URL` | — |
+| Storage: default | — | LibSQL `file:./mastra.db` |
+| Multi-region | `ENABLE_MULTI_REGION=true` + Postgres | reported as inactive |
+| Observability | on by default | `ENABLE_OBSERVABILITY=false` disables |
+| Model providers | any `*_API_KEY` | app boots; generation fails clearly |
+| Model selection | `MODEL_<AGENT>` / `MODEL` / `DEFAULT_MODEL` | built-in default |
 
 ## 🧪 Testing
 
-### Run all tests
-
 ```bash
-npm run test:all
-```
-
-### Run specific test suites
-
-```bash
-# Unit tests
-npm run test:unit
-
-# Integration tests
+npm run test:all       # smoke → unit → integration → evals (what CI runs)
+npm run test:smoke     # zero-config boot: instance + 4 agents + storage
+npm run test:unit      # deterministic per-component (18)
 npm run test:integration
-
-# E2E evaluations with Mastra Evals
-npm run test:evals
-
-# Smoke tests
-npm run test:smoke
+npm run test:evals     # structural agent/dataset assertions (offline-safe)
 ```
 
-### Testing strategy
+| Tier | Files | Purpose |
+|------|-------|---------|
+| Smoke | `tests/smoke/` | the whole instance constructs with **zero env vars**; agents/workflow registered |
+| Unit | `tests/unit/` | agents identity, tools behavior, event bus |
+| Integration | `tests/integration/` | cross-domain event flow (Postgres service in CI) |
+| Evals | `tests/evals/` | agent structure + dataset contracts (Mastra Evals-ready layout for live LLM evals) |
 
-- **Unit tests**: Fast, deterministic tests for individual components
-- **Integration tests**: Cross-domain and workflow tests
-- **Evals**: LLM-based quality evaluation with gates and scorers
-- **CI/CD**: Automated testing on every push/PR
+Details: `docs/TESTING.md`.
 
 ## 📦 Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Build for production |
-| `npm run start` | Start production server |
-| `npm run init` | Initialize project |
-| `npm run migrate` | Run database migrations |
-| `npm run health-check` | Verify system health |
-| `npm run update` | Update Mastra packages |
-| `npm run test` | Run all tests |
-| `npm run lint` | Lint code |
-| `npm run format` | Format code |
+| `npm run dev` | Mastra dev server + Studio (hot reload) |
+| `npm run build` | production bundle → `.mastra/output/` |
+| `npm run start` | run the built bundle |
+| `npm run init` | full bootstrap: deps + lint + build + tests + git |
+| `npm run lint` | ESLint, **fails on errors or warnings** (`--max-warnings=0`) |
+| `npm run lint:fix` / `format` / `format:check` | Prettier/ESLint writers |
+| `npm run test` / `test:all` / `test:watch` | vitest runners |
+| `npm run health-check` | probe a running instance (server, agents, workflows, storage, keys) |
+| `npm run update` | bump all `@mastra/*` + re-run the quality gate |
+| `npm run deploy:staging` / `deploy:production` | Mastra Platform deploy (needs platform env vars) |
 
 ## 🐳 Docker
 
-### Development
-
 ```bash
 cd docker
-docker-compose up
+docker-compose up -d                                # dev: app + PostgreSQL/pgvector
+docker-compose -f docker-compose.prod.yml up -d     # HA: api, workers, scheduler, background, postgres
 ```
 
-### Production (High Availability)
+Multi-region is the same prod compose with `ENABLE_MULTI_REGION=true` + region vars (see `.env.example`); the replication config is applied by `shared/config/storage.ts`.
 
-```bash
-cd docker
-docker-compose -f docker-compose.prod.yml up -d
-```
+## 🔄 Auto-update
 
-### Multi-Region (Optional)
+- **Renovate** (`.github/renovate.json`): grouped `@mastra/*` update PRs.
+- **`npm run update`**: local one-shot bump with the full gate after.
+- **Weekly codemod job** (`.github/workflows/auto-update.yml`): runs `npx @mastra/codemod@latest` and files an issue when migrations are suggested.
+- Changesets are recommended for release notes: `npx changeset` after user-visible changes.
 
-```bash
-# Enable in .env
-ENABLE_MULTI_REGION=true
-PRIMARY_REGION=us-east-1
-SECONDARY_REGION=eu-west-1
+Every dependency bump must pass: `npm run lint` → `npx tsc --noEmit` → `npm run test:all` → `npm run build`.
 
-# Start with multi-region config
-docker-compose -f docker-compose.multi-region.yml up -d
-```
+## 🤝 Contributing conventions
+
+- **Conventional Commits** (`feat:`, `fix:`, `test:`, `docs:`, `chore:`…), imperative, ≤ 72 chars.
+- Branches `feat/<slug>`, `fix/<slug>`; PRs = Summary + Test plan; CI gates must be green to merge.
+- Never hard-code a model string; never bypass the env-optional pattern; use `logger`, not `console`.
+- Full rules: `AGENTS.md` (root) and the per-directory hierarchy linked from its Documentation Hierarchy index.
 
 ## 📚 Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) - Design decisions and patterns
-- [Deployment](docs/DEPLOYMENT.md) - Production deployment guide
-- [Testing](docs/TESTING.md) - Testing strategy and best practices
-- [Domains](docs/domains/) - Documentation for each domain
-
-## 🔧 Configuration
-
-### Environment Variables
-
-See `.env.example` for all available configuration options.
-
-Key variables:
-- `DEEPINFRA_API_KEY` / `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` / `GOOGLE_API_KEY` - Model provider API keys (set one)
-- `MODEL` / `MODEL_<AGENT>` - Provider-agnostic model selection, e.g. `MODEL=deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731`
-- `DATABASE_URL` - PostgreSQL connection string
-- `ENABLE_MULTI_REGION` - Enable multi-region support
-- `MASTRA_WORKERS` - Worker role assignment
-- `LOG_LEVEL` - Logging verbosity
-
-### Multi-Region
-
-Enable multi-region support by setting:
-
-```bash
-ENABLE_MULTI_REGION=true
-PRIMARY_REGION=us-east-1
-SECONDARY_REGION=eu-west-1
-```
-
-## 🔄 Auto-Update
-
-The boilerplate includes automatic dependency updates via Renovate:
-
-- Updates Mastra packages automatically
-- Runs tests before merging
-- Creates PRs for review
-- Uses changesets for changelog
-
-Manual update:
-
-```bash
-npm run update
-```
-
-## 📊 Monitoring
-
-Basic monitoring is built-in:
-
-- **Health checks**: `GET /health` endpoint
-- **Observability**: Tracing, logging, metrics via `@mastra/observability`
-- **Scripts**: `npm run health-check` for system verification
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `npm run test:all`
-5. Submit a pull request
+- `AGENTS.md` — rules, workflows, deployment, self-update, gotchas
+- `docs/adr/` — architecture decision records (vertical slicing, pgvector, event-driven)
+- `docs/TESTING.md` — test tiers and evals
+- `docs/domains/` — per-domain reference notes
 
 ## 📄 License
 
 MIT
-
-## 🙏 Acknowledgments
-
-- [Mastra Framework](https://mastra.ai) - AI agent framework
-- [Vertical Slice Architecture](https://jeremydmiller.com/2026/06/04/the-codebase-is-the-prompt-wolverine-vertical-slices-and-ai-assisted-development/)
-- [Domain-Driven Design for AI Agents](https://slavadubrov.github.io/blog/2025/10/20/domain-driven-design-ai-agents/)
