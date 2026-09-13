@@ -1,24 +1,24 @@
 #!/bin/bash
-# Deep initialization script for Mastra Boilerplate
+# Initialization script for Mastra Boilerplate.
+# Zero-config safe: the app runs without any setup step below beyond deps.
 
 set -e
 
 echo "🚀 Initializing Mastra Boilerplate..."
 echo ""
 
-# Colors for output
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Helper functions
 success() { echo -e "${GREEN}✓${NC} $1"; }
-error() { echo -e "${RED}✗${NC} $1"; exit 1; }
+error()   { echo -e "${RED}✗${NC} $1"; exit 1; }
 warning() { echo -e "${YELLOW}⚠${NC} $1"; }
-info() { echo -e "${GREEN}→${NC} $1"; }
+info()    { echo -e "${GREEN}→${NC} $1"; }
 
-# 1. Check Node.js version
+# 1. Node.js version
 info "Checking Node.js version..."
 NODE_VERSION=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
 if [ "$NODE_VERSION" -lt 22 ]; then
@@ -26,84 +26,50 @@ if [ "$NODE_VERSION" -lt 22 ]; then
 fi
 success "Node.js $(node --version)"
 
-# 2. Check npm
+# 2. npm
 info "Checking npm..."
-NPM_VERSION=$(npm --version)
-success "npm v${NPM_VERSION}"
+success "npm v$(npm --version)"
 
-# 3. Install dependencies
+# 3. Install dependencies (--legacy-peer-deps: @mastra/evals ↔ vitest peer conflict)
 info "Installing dependencies..."
 if [ -f "package-lock.json" ]; then
-  npm ci
+  npm ci --legacy-peer-deps
 else
-  npm install
+  npm install --legacy-peer-deps
 fi
 success "Dependencies installed"
 
-# 4. Setup environment file
+# 4. Environment file (OPTIONAL — app boots zero-config with LibSQL fallback)
 info "Setting up environment..."
 if [ ! -f ".env" ]; then
   cp .env.example .env
-  warning ".env file created from .env.example"
-  warning "Please configure .env with your credentials before proceeding"
+  warning ".env created from .env.example — every variable is optional;"
+  warning "set a provider API key (DEEPINFRA_API_KEY, OPENAI_API_KEY, ...) to enable generation."
 else
-  success ".env file already exists"
+  success ".env already exists"
 fi
 
-# 5. Check database configuration
-info "Checking database configuration..."
-if grep -q "DATABASE_URL=postgresql://" .env 2>/dev/null; then
-  success "Database URL configured"
-else
-  warning "Database URL not configured. Please set DATABASE_URL in .env"
-fi
+# 5. Quality gate (mirrors CI: lint strict, build, smoke + unit + integration)
+info "Running lint (0 errors / 0 warnings)..."
+npm run lint
+success "Lint clean"
 
-# 6. Check API keys
-info "Checking API keys..."
-if grep -q "DEEPINFRA_API_KEY=." .env 2>/dev/null; then
-  success "DeepInfra API key configured"
-else
-  warning "DeepInfra API key not configured. Set DEEPINFRA_API_KEY in .env"
-fi
-
-# 7. Create workspace directory
-info "Creating workspace directory..."
-mkdir -p workspace
-success "Workspace directory created"
-
-# 8. Run database migrations (if database is available)
-info "Checking database connectivity..."
-if command -v psql &> /dev/null && grep -q "DATABASE_URL=postgresql://" .env 2>/dev/null; then
-  source .env
-  if psql "$DATABASE_URL" -c '\q' 2>/dev/null; then
-    success "Database connection successful"
-    info "Running migrations..."
-    npm run migrate || warning "Migrations failed or already applied"
-  else
-    warning "Cannot connect to database. Skipping migrations."
-  fi
-else
-  warning "Database not configured or psql not available. Skipping migrations."
-fi
-
-# 9. Build the application
 info "Building application..."
-npm run build || warning "Build failed. This is normal for initial setup."
+npm run build
+success "Build produced .mastra/output/"
 
-# 10. Run smoke tests
-info "Running smoke tests..."
-if npm run test:smoke 2>/dev/null; then
-  success "Smoke tests passed"
-else
-  warning "Smoke tests failed or not configured yet"
-fi
+info "Running smoke + unit + integration tests..."
+npm run test:smoke
+npm run test:unit
+npm run test:integration
+success "Tests passed (structural evals run with 'npm run test:all' / CI)"
 
-# 11. Initialize git (if not already initialized)
+# 6. Git
 if [ ! -d ".git" ]; then
   info "Initializing git repository..."
   git init
   git add .
-  git commit -m "Initial commit from Mastra Boilerplate"
+  git commit -m "chore: initialize from Mastra Boilerplate"
   success "Git repository initialized"
 else
   success "Git repository already exists"
@@ -115,15 +81,14 @@ echo -e "${GREEN}✅ Initialization complete!${NC}"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "📝 Next steps:"
-echo "  1. Configure .env with your API keys and database credentials"
-echo "  2. Start PostgreSQL: cd docker && docker-compose up -d postgres"
-echo "  3. Run migrations: npm run migrate"
-echo "  4. Start development: npm run dev"
-echo "  5. Visit http://localhost:4111 for Mastra Studio"
+echo "  1. (Optional) Add a provider API key to .env to enable generation"
+echo "  2. npm run dev   # Studio: http://localhost:4111 (watch the service banner)"
+echo "  3. npm run health-check   # probe a running instance"
+echo "  4. cd docker && docker-compose up -d   # optional PostgreSQL/pgvector stack"
 echo ""
 echo "📚 Documentation:"
-echo "  - README.md: Main documentation"
-echo "  - docs/ARCHITECTURE.md: Architecture decisions"
-echo "  - docs/DEPLOYMENT.md: Deployment guide"
-echo "  - docs/TESTING.md: Testing strategy"
+echo "  - README.md: quickstart and features"
+echo "  - AGENTS.md: rules, conventions, deployment, self-update"
+echo "  - docs/adr/: architecture decision records"
+echo "  - docs/TESTING.md: test tiers"
 echo ""
