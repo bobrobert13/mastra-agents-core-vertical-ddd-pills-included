@@ -5,15 +5,15 @@ import { webFetchTool } from '../tools/web-fetch';
 import { summarizeTool } from '../tools/summarize';
 import { logger } from '../../../shared/logger';
 import { runTool } from '../../../shared/tools/run-tool';
+import {
+  contentsSchema,
+  deepResearchInputSchema,
+  deepResearchOutputSchema,
+  fetchOutputSchema,
+  searchOutputSchema,
+  type WebSearchOutput,
+} from './schemas';
 
-interface SearchResult {
-  url: string;
-  title: string;
-  snippet: string;
-}
-interface WebSearchOutput {
-  results: SearchResult[];
-}
 interface WebFetchOutput {
   content: string;
   title?: string;
@@ -28,20 +28,8 @@ interface SummarizeOutput {
 // Step 1: Search for relevant sources
 const searchStep = createStep({
   id: 'search-sources',
-  inputSchema: z.object({
-    query: z.string(),
-    maxSources: z.number().optional().default(3),
-  }),
-  outputSchema: z.object({
-    query: z.string(),
-    sources: z.array(
-      z.object({
-        title: z.string(),
-        url: z.string(),
-        snippet: z.string(),
-      })
-    ),
-  }),
+  inputSchema: deepResearchInputSchema,
+  outputSchema: searchOutputSchema,
   execute: async ({ inputData }) => {
     const result = await runTool<WebSearchOutput>(webSearchTool, {
       query: inputData.query,
@@ -58,27 +46,8 @@ const searchStep = createStep({
 // Step 2: Fetch content from sources
 const fetchStep = createStep({
   id: 'fetch-content',
-  inputSchema: z.object({
-    query: z.string(),
-    sources: z.array(
-      z.object({
-        title: z.string(),
-        url: z.string(),
-        snippet: z.string(),
-      })
-    ),
-  }),
-  outputSchema: z.object({
-    query: z.string(),
-    contents: z.array(
-      z.object({
-        url: z.string(),
-        title: z.string().optional(),
-        content: z.string(),
-        wordCount: z.number(),
-      })
-    ),
-  }),
+  inputSchema: searchOutputSchema,
+  outputSchema: fetchOutputSchema,
   execute: async ({ inputData }) => {
     const contents = await Promise.all(
       inputData.sources.map(async source => {
@@ -111,21 +80,9 @@ const fetchStep = createStep({
 const summarizeStep = createStep({
   id: 'summarize-content',
   inputSchema: z.object({
-    contents: z.array(
-      z.object({
-        url: z.string(),
-        title: z.string().optional(),
-        content: z.string(),
-        wordCount: z.number(),
-      })
-    ),
-    originalQuery: z.string(),
+    contents: contentsSchema,
   }),
-  outputSchema: z.object({
-    summary: z.string(),
-    sources: z.array(z.string()),
-    totalWords: z.number(),
-  }),
+  outputSchema: deepResearchOutputSchema,
   execute: async ({ inputData }) => {
     const summaries = await Promise.all(
       inputData.contents.map(async content => {
@@ -151,13 +108,6 @@ const summarizeStep = createStep({
       totalWords: inputData.contents.reduce((acc, c) => acc + c.wordCount, 0),
     };
   },
-});
-
-// Public output shape (spec 06 §3.4: workflow I/O schemas UNCHANGED).
-const deepResearchOutputSchema = z.object({
-  summary: z.string(),
-  sources: z.array(z.string()),
-  totalWords: z.number(),
 });
 
 /**
@@ -215,47 +165,11 @@ export const reviewFindingsStep = createStep({
 // Complete workflow
 export const deepResearchWorkflow = createWorkflow({
   id: 'deep-research',
-  inputSchema: z.object({
-    query: z.string(),
-    maxSources: z.number().optional().default(3),
-  }),
+  inputSchema: deepResearchInputSchema,
   outputSchema: deepResearchOutputSchema,
 })
   .then(searchStep)
   .then(fetchStep)
-  .then(
-    createStep({
-      id: 'prepare-summarization',
-      inputSchema: z.object({
-        query: z.string(),
-        contents: z.array(
-          z.object({
-            url: z.string(),
-            title: z.string().optional(),
-            content: z.string(),
-            wordCount: z.number(),
-          })
-        ),
-      }),
-      outputSchema: z.object({
-        contents: z.array(
-          z.object({
-            url: z.string(),
-            title: z.string().optional(),
-            content: z.string(),
-            wordCount: z.number(),
-          })
-        ),
-        originalQuery: z.string(),
-      }),
-      execute: async ({ inputData }) => {
-        return {
-          contents: inputData.contents,
-          originalQuery: inputData.query,
-        };
-      },
-    })
-  )
   .then(summarizeStep)
   .then(reviewFindingsStep)
   .commit();

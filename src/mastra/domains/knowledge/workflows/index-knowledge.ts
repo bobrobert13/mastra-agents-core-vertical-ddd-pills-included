@@ -3,8 +3,6 @@ import { createHash } from 'node:crypto';
 import path from 'node:path';
 
 import { createStep, createWorkflow } from '@mastra/core/workflows';
-import { z } from 'zod';
-import type { MastraEmbeddingModel } from '@mastra/core/vector';
 import { MDocument } from '@mastra/rag';
 import { PgVector } from '@mastra/pg';
 
@@ -17,48 +15,24 @@ import {
   semanticRecallAvailable,
   type Vector,
 } from '../../../shared/config/vectors';
-import { knowledgeContentTypeSchema, type KnowledgeContentType } from '../entities/document';
+import type { KnowledgeContentType } from '../entities/document';
 import { knowledgeIndexedEvent, knowledgeIndexFailedEvent } from '../events';
+import {
+  chunkedDocSchema,
+  embeddedDocSchema,
+  readDocSchema,
+  workflowInputSchema,
+  workflowOutputSchema,
+  type IndexKnowledgeDeps,
+} from './schemas';
+
+export type { IndexKnowledgeDeps };
 
 /** Index the knowledge slice writes into — the query tool shares the name. */
 export const KNOWLEDGE_INDEX_NAME = 'knowledge_docs';
 
 /** Batch ceiling per doEmbed call (AI-SDK maxEmbeddingsPerCall, spec 03 §3.6). */
 const EMBED_BATCH = 256;
-
-export interface IndexKnowledgeDeps {
-  /** Deterministic stub embedder (tests); default = config-resolved passage model. */
-  embedder?: MastraEmbeddingModel<string>;
-  /** Vector store instance (tests); default = the 'mastra-vectors' registry entry. */
-  vector?: Vector;
-  /** Embedder banner detail for chunk metadata provenance; default from config. */
-  embedderDetail?: string;
-}
-
-// --- Schemas (spec 03 §3.6) -------------------------------------------------
-
-const workflowInputSchema = z
-  .object({
-    source: z.enum(['path', 'inline']),
-    path: z.string().optional(),
-    content: z.string().optional(),
-    contentType: knowledgeContentTypeSchema.default('text'),
-    docId: z.string().min(1).optional(),
-  })
-  .refine(i => (i.source === 'path' ? !!i.path : true), {
-    message: "path is required when source === 'path'",
-  })
-  .refine(i => (i.source === 'inline' ? !!i.content : true), {
-    message: "content is required when source === 'inline'",
-  });
-
-const workflowOutputSchema = z.object({
-  docId: z.string(),
-  indexName: z.string(),
-  dimension: z.number().int(),
-  chunkCount: z.number().int(),
-  skippedChunks: z.number().int(),
-});
 
 /**
  * Thrown by `store-chunks` when an existing index was created by a different-
@@ -128,12 +102,7 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
   const readDocument = createStep({
     id: 'read-document',
     inputSchema: workflowInputSchema,
-    outputSchema: z.object({
-      docId: z.string(),
-      text: z.string(),
-      contentType: knowledgeContentTypeSchema,
-      source: z.string(),
-    }),
+    outputSchema: readDocSchema,
     execute: async ({ inputData }) => {
       let text: string;
       let source: string;
@@ -158,17 +127,8 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
   // Step 2 — chunk with MDocument (recursive 512/50, spec 03 §3.6).
   const chunkDocument = createStep({
     id: 'chunk-document',
-    inputSchema: z.object({
-      docId: z.string(),
-      text: z.string(),
-      contentType: knowledgeContentTypeSchema,
-      source: z.string(),
-    }),
-    outputSchema: z.object({
-      docId: z.string(),
-      source: z.string(),
-      chunks: z.array(z.object({ chunkId: z.string(), text: z.string(), index: z.number().int() })),
-    }),
+    inputSchema: readDocSchema,
+    outputSchema: chunkedDocSchema,
     execute: async ({ inputData }) => {
       const doc =
         inputData.contentType === 'markdown'
@@ -193,18 +153,8 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
   // Step 3 — embed batches with the resolved passage model (or injected stub).
   const embedChunks = createStep({
     id: 'embed-chunks',
-    inputSchema: z.object({
-      docId: z.string(),
-      source: z.string(),
-      chunks: z.array(z.object({ chunkId: z.string(), text: z.string(), index: z.number().int() })),
-    }),
-    outputSchema: z.object({
-      docId: z.string(),
-      source: z.string(),
-      chunks: z.array(z.object({ chunkId: z.string(), text: z.string(), index: z.number().int() })),
-      vectors: z.array(z.array(z.number())),
-      dimension: z.number().int(),
-    }),
+    inputSchema: chunkedDocSchema,
+    outputSchema: embeddedDocSchema,
     execute: async ({ inputData }) => {
       const embedder = deps.embedder ?? resolveEmbedder().passage;
       if (!embedder) {
@@ -246,13 +196,7 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
   // Step 4 — ensure index (dimension fail-fast) + idempotent upsert.
   const storeChunks = createStep({
     id: 'store-chunks',
-    inputSchema: z.object({
-      docId: z.string(),
-      source: z.string(),
-      chunks: z.array(z.object({ chunkId: z.string(), text: z.string(), index: z.number().int() })),
-      vectors: z.array(z.array(z.number())),
-      dimension: z.number().int(),
-    }),
+    inputSchema: embeddedDocSchema,
     outputSchema: workflowOutputSchema,
     execute: async ({ inputData, mastra }) => {
       const store = resolveVectorStore(
