@@ -20,7 +20,7 @@ All application source. A single Mastra instance (`index.ts`) composes four vert
 | `domains/` | The vertical slices (see `domains/AGENTS.md`) |
 | `routes/` | Custom HTTP surface (spec 08): `buildServerSurface` + webhook/health/stream routes + route middleware — see `routes/AGENTS.md` |
 | `mcp/` | **Composition-layer exception (ADR-007):** the project's own read-only `MCPServer` assembly (`server.ts`, gated on `ENABLE_MCP_SERVER=true`) + stdio bundle entry (`stdio.ts`). Imports domain barrels — legal here, forbidden in `shared/`. `index.ts` gains exactly one awaited `buildMcpServer(services)` call (see `mcp/AGENTS.md`) |
-| `shared/` | Cross-domain utilities: logger, event bus, config builders (storage/vectors/observability/pubsub/auth/mcp/providers/service-status/model/schedules), run-tool, workspace jail (see `shared/AGENTS.md`) |
+| `shared/` | Cross-domain utilities: logger, event bus, config builders (storage/vectors/observability/pubsub/auth/mcp/providers/service-status/model/schedules), run-tool, workspace jail, `buildDomainAgent()` helper (see `shared/AGENTS.md`) |
 | `public/` | Runtime data dir; contains generated `mastra.db*` (LibSQL) — gitignored, never edit |
 
 ## For AI Agents

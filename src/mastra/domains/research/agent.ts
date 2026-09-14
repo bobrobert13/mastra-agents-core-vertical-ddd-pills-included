@@ -1,10 +1,9 @@
-import { Agent } from '@mastra/core/agent';
-import { agentModel, memoryModel } from '../../shared/config/model';
-import { buildDomainMemory } from '../../shared/config/vectors';
-import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import {
+  buildDomainAgent,
+  createScopeGuard,
+  type DomainScope,
+} from '../../shared/agents/build-agent';
 import { buildSecurityStack } from '../../shared/processors/security-stack';
-import { agentScorersFor } from '../../shared/evals';
-import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { webSearchTool } from './tools/web-search';
 import { webFetchTool } from './tools/web-fetch';
 import { summarizeTool } from './tools/summarize';
@@ -13,7 +12,8 @@ import { loadMcpToolsFor } from '../../shared/config/mcp';
 export const researchScope: DomainScope = {
   domain: 'research',
   agentName: 'Research Agent',
-  scope: 'web research — searching the web, fetching URLs and summarizing the retrieved sources',
+  scope:
+    'web research — searching the web, fetching URLs and summarizing the retrieved sources',
   outOfScopeExamples: [
     'general-knowledge or encyclopedia questions you could answer from memory',
     'task creation or scheduling',
@@ -21,23 +21,28 @@ export const researchScope: DomainScope = {
     'math, code writing or creative writing with no web component',
   ],
   siblings: [
-    { name: 'Task Management Agent', description: 'create, update and schedule tasks' },
-    { name: 'File Operations Agent', description: 'read, write and edit local files' },
-    { name: 'Communication Agent', description: 'clarify user intent with structured questions' },
+    {
+      name: 'Task Management Agent',
+      description: 'create, update and schedule tasks',
+    },
+    {
+      name: 'File Operations Agent',
+      description: 'read, write and edit local files',
+    },
+    {
+      name: 'Communication Agent',
+      description: 'clarify user intent with structured questions',
+    },
   ],
 };
 
+// Kept for backward compat — structural wiring tests reference these exports
 export const researchScopeGuard = createScopeGuard(researchScope);
-// Spec 06 hard rule: processor arrays come from buildSecurityStack (scope guard is slot 0).
 export const researchSecurityStack = buildSecurityStack({ scope: researchScope });
 
-export const researchAgent = new Agent({
-  id: 'research-agent',
-  name: 'Research Agent',
-  description: 'Specialized agent for web research and information synthesis',
-  instructions: scopedInstructions(
-    researchScope,
-    `You are a research specialist. Help users find, verify, and synthesize information from the web.
+export const researchAgent = buildDomainAgent({
+  scope: researchScope,
+  instructionsBody: `You are a research specialist. Help users find, verify, and synthesize information from the web.
 
 Your capabilities:
 - Search the web for current information
@@ -52,25 +57,18 @@ When researching:
 5. Highlight any conflicting information
 
 Always provide accurate, up-to-date information with proper attribution.
-External (MCP) tools available to you may only be used for this agent's research scope; never use them to answer from or act outside it.`
-  ),
-  model: agentModel.research(),
-  defaultOptions: {
-    maxSteps: 50,
-    autoResumeSuspendedTools: true,
-  },
-  inputProcessors: researchSecurityStack.inputProcessors,
-  outputProcessors: researchSecurityStack.outputProcessors,
-  scorers: agentScorersFor('research-agent'), // spec 07 §3.2 (live-run score emission → Studio; thresholds are runEvals/experiment concerns)
-  memory: buildDomainMemory({
-    generateTitle: true,
-    observationalMemory: {
-      model: memoryModel(),
-    },
-  }),
+External (MCP) tools available to you may only be used for this agent's research scope; never use them to answer from or act outside it.`,
+  modelKey: 'research',
+  maxSteps: 50,
+  enableObservationalMemory: true,
   tools: async ({ mastra }) => {
-    const base = { web_search: webSearchTool, web_fetch: webFetchTool, summarize: summarizeTool };
-    const registered = mastra?.listTools() ?? {}; // NON-THROWING read — getTool throws on a missing key (spec 03 §3.6)
+    const base = {
+      web_search: webSearchTool,
+      web_fetch: webFetchTool,
+      summarize: summarizeTool,
+    };
+    const registered =
+      mastra?.listTools() ?? {}; // NON-THROWING read — getTool throws on a missing key (spec 03 §3.6)
     const mcp = await loadMcpToolsFor('research'); // spec 04: {} with MCP_SERVERS unset, no spawn, ~0ms
     return {
       ...base,

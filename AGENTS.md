@@ -84,7 +84,7 @@ At startup the server prints a **service availability banner** (✅ active / ○
 ### Working In This Directory
 - **Vertical slices**: everything a domain needs lives inside its folder. Domains NEVER import from other domains — cross-domain traffic goes through `shared/events/event-bus.ts`.
 - Only truly cross-cutting code goes in `src/mastra/shared/`.
-- **Every `new Agent` MUST build its processor arrays from `buildSecurityStack(domainScope)` (hard rule, see gotcha #7 + spec 06)**: `inputProcessors` (the scope guard is element 0 inside the stack) AND `outputProcessors`, plus `scopedInstructions(scope, body)` from `shared/agents/scoped-instructions.ts`. Hand-assembling a bare `[scopeGuard]` array or omitting `outputProcessors` violates the rule. Positive-only instructions are forbidden — a capable model will otherwise answer anything. Each domain exports its `DomainScope` (plain data; siblings listed without imports) and its `*SecurityStack` (structural wiring test).
+- **Use `buildDomainAgent()` for creating agents** (see [Creating an Agent](#creating-an-agent) below). It enforces the Spec 06 hard rule automatically: processor arrays come from `buildSecurityStack()` (scope guard = slot 0), `inputProcessors` AND `outputProcessors` are wired, plus `scopedInstructions(scope, body)` is applied. Hand-assembling a bare `[scopeGuard]` array or omitting `outputProcessors` violates the rule. Positive-only instructions are forbidden — a capable model will otherwise answer anything. Each domain exports its `DomainScope` (plain data; siblings listed without imports) and its `*SecurityStack` (structural wiring test).
 - Register new agents in `src/mastra/index.ts` (agents map) — and new workflows in its `workflows` map (unregistered workflows stay invisible to `/api/workflows`; this actually happened with `deep-research`). Storage/observability wiring is already automatic.
 - Memory-enabled agents require `memory: { thread, resource }` in raw API generate calls; Studio supplies it automatically.
 - Off-topic input to a scoped agent returns empty text with a `tripwire` reason (the abort redirect) — the guard working, not a bug.
@@ -183,35 +183,49 @@ export const myTool = createTool({
 ```
 
 ### Creating an Agent
+
+**Use `buildDomainAgent()`** — it wires the security stack, memory, and scorers automatically while enforcing the Spec 06 hard rule (scope guard = slot 0, both `inputProcessors` AND `outputProcessors`).
+
 ```typescript
-import { Agent } from '@mastra/core/agent';
-import { agentModel, memoryModel } from '../../shared/config/model';
-import { buildDomainMemory } from '../../shared/config/vectors';
-import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import {
+  buildDomainAgent,
+  createScopeGuard,
+  type DomainScope,
+} from '../../shared/agents/build-agent';
 import { buildSecurityStack } from '../../shared/processors/security-stack';
-import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 
 export const myScope: DomainScope = {
-  domain: 'my-domain', agentName: 'My Agent',
-  scope: 'the ONE thing this agent does', outOfScopeExamples: ['...'],
+  domain: 'my-domain',
+  agentName: 'My Agent',
+  scope: 'the ONE thing this agent does',
+  outOfScopeExamples: ['...'],
   siblings: [/* the other agents, as plain data */],
 };
-export const myScopeGuard = createScopeGuard(myScope); // kept for compat; the stack owns slot 0
-export const mySecurityStack = buildSecurityStack({ scope: myScope }); // + disableResponseCache:true for mutating agents
 
-export const myAgent = new Agent({
-  id: 'my-agent',
-  name: 'My Agent',
-  instructions: scopedInstructions(myScope, 'You are...'),
-  model: agentModel.myDomain(), /* precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL */
-  inputProcessors: mySecurityStack.inputProcessors, /* scope guard = element 0; hard rule */
-  outputProcessors: mySecurityStack.outputProcessors, /* hard rule — never omit */
-  memory: buildDomainMemory({
-    generateTitle: true,
-    observationalMemory: { model: memoryModel() },
-  }),
+// Kept for backward compat — structural wiring tests reference these
+export const myScopeGuard = createScopeGuard(myScope);
+export const mySecurityStack = buildSecurityStack({
+  scope: myScope,
+  disableResponseCache: true, // REQUIRED for mutating agents (spec 06 R2)
+});
+
+export const myAgent = buildDomainAgent({
+  scope: myScope,
+  instructionsBody: `You are a specialist...`,
+  modelKey: 'myDomain', // precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL
+  enableObservationalMemory: true, // optional: compaction + semantic recall
+  disableResponseCache: true, // REQUIRED for mutating agents
+  tools: { my_tool: myTool },
 });
 ```
+
+**Key options:**
+- `instructionsBody` — agent-specific instructions (scoped instructions are prepended automatically)
+- `modelKey` — defaults to `scope.domain`; maps to `agentModel.<key>()`
+- `enableObservationalMemory` — adds compaction + semantic recall (default: false)
+- `disableResponseCache` — **REQUIRED** for mutating agents (file writes, task creation, etc.)
+- `tools` — static map or async function `({ mastra }) => ({...})`
+- `overrides` — any additional `AgentConfig` fields
 
 ### Creating a Workflow
 ```typescript
