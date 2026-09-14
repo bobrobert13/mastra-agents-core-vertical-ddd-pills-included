@@ -1,10 +1,9 @@
-import { Agent } from '@mastra/core/agent';
-import { agentModel, memoryModel } from '../../shared/config/model';
-import { buildDomainMemory } from '../../shared/config/vectors';
-import { createScopeGuard, type DomainScope } from '../../shared/processors/scope-guard';
+import {
+  buildDomainAgent,
+  createScopeGuard,
+  type DomainScope,
+} from '../../shared/agents/build-agent';
 import { buildSecurityStack } from '../../shared/processors/security-stack';
-import { agentScorersFor } from '../../shared/evals';
-import { scopedInstructions } from '../../shared/agents/scoped-instructions';
 import { createTaskTool } from './tools/create-task';
 import { updateTaskTool } from './tools/update-task';
 import { scheduleTaskTool } from './tools/schedule-task';
@@ -20,23 +19,30 @@ export const taskManagementScope: DomainScope = {
     'actual work execution — you track tasks, you do not perform them',
   ],
   siblings: [
-    { name: 'Research Agent', description: 'web research: search, fetch and summarize sources' },
-    { name: 'File Operations Agent', description: 'read, write and edit local files' },
-    { name: 'Communication Agent', description: 'clarify user intent with structured questions' },
+    {
+      name: 'Research Agent',
+      description: 'web research: search, fetch and summarize sources',
+    },
+    {
+      name: 'File Operations Agent',
+      description: 'read, write and edit local files',
+    },
+    {
+      name: 'Communication Agent',
+      description: 'clarify user intent with structured questions',
+    },
   ],
 };
 
+// Kept for backward compat — structural wiring tests reference these exports
 export const taskManagementScopeGuard = createScopeGuard(taskManagementScope);
-// Spec 06 hard rule: processor arrays come from buildSecurityStack (scope guard is slot 0).
-export const taskManagementSecurityStack = buildSecurityStack({ scope: taskManagementScope });
+export const taskManagementSecurityStack = buildSecurityStack({
+  scope: taskManagementScope,
+});
 
-export const taskManagementAgent = new Agent({
-  id: 'task-management-agent',
-  name: 'Task Management Agent',
-  description: 'Specialized agent for task creation, management, and scheduling',
-  instructions: scopedInstructions(
-    taskManagementScope,
-    `You are a task management specialist. Help users create, organize, and schedule tasks.
+export const taskManagementAgent = buildDomainAgent({
+  scope: taskManagementScope,
+  instructionsBody: `You are a task management specialist. Help users create, organize, and schedule tasks.
 
 Your capabilities:
 - Create new tasks with priorities and due dates
@@ -50,22 +56,10 @@ When managing tasks:
 4. Use scheduling for recurring tasks
 5. Provide clear confirmation of actions
 
-Always be organized and precise with task details.`
-  ),
-  model: agentModel.tasks(),
-  defaultOptions: {
-    maxSteps: 30,
-    autoResumeSuspendedTools: true,
-  },
-  inputProcessors: taskManagementSecurityStack.inputProcessors,
-  outputProcessors: taskManagementSecurityStack.outputProcessors,
-  scorers: agentScorersFor('task-management-agent'), // spec 07 §3.2 (live-run score emission → Studio; thresholds are runEvals/experiment concerns)
-  memory: buildDomainMemory({
-    generateTitle: true,
-    observationalMemory: {
-      model: memoryModel(),
-    },
-  }),
+Always be organized and precise with task details.`,
+  modelKey: 'tasks',
+  maxSteps: 30,
+  enableObservationalMemory: true,
   tools: {
     create_task: createTaskTool,
     update_task: updateTaskTool,

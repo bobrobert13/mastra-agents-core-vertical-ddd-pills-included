@@ -26,6 +26,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 | `processors/scope-guard.ts` | `createScopeGuard(DomainScope)`: **hard scope enforcement InputProcessor** — classifies the last user message via an internal provider-agnostic Agent; out-of-scope → `abort()` (TripWire before the LLM) with a sibling redirect; classifier errors fail OPEN; `SCOPE_GUARD=off` disables, inert without a provider key. Slot 0 of the security stack — deliberately NOT extended (one reason to change); agents never wire it directly anymore |
 | `processors/security-stack.ts` | `buildSecurityStack({scope, disableResponseCache?})`: **the hard-rule processor pipeline** — `[scopeGuard(0), TokenLimiter(1), TokenCostControl(1.5 COST_LIMIT_USD-only), PromptInjectionDetector(2), ResponseCache(3-last)]` + `outputProcessors` (PIIDetector mask). Inert rule: LLM detectors only with provider key (they HARD-THROW on guard-model failure — gotcha #16). `scanToolOutputForInjection()` = web-fetch output-boundary scan (Q3). `registerSecurityStackStatus()` banner (spec 06, ADR-009) |
 | `agents/scoped-instructions.ts` | `scopedInstructions(scope, body)`: mandatory instruction template — Scope / Out of scope / Refusal protocol / Tool-use honesty blocks above the capabilities body. Positive-only instructions are forbidden |
+| `agents/build-agent.ts` | `buildDomainAgent(options)`: helper that wires security stack (scope guard = slot 0), memory, and scorers automatically while enforcing the Spec 06 hard rule. All domain agents use this instead of hand-wiring `new Agent()` |
 | `config/service-status.ts` | `ServiceStatus`/`ServiceRegistry` types + `logServiceAvailability()` banner (✅ active / ○ inactive) |
 | `config/model.ts` | **Provider-agnostic model resolution**: `agentModel.<key>()` + `memoryModel()` + `guardModel()` + `embeddingModel()`/`resolveEmbedder()` (`SCOPE_GUARD_MODEL` > `MODEL` > `DEFAULT_MODEL`; precedence `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL`). Never hard-code a model string |
 | `config/libsql-feedback-compat.ts` | `LibSQLFeedbackCompatStore extends ObservabilityLibSQL`: Studio feedback GETs return schema-conformant empty results instead of 500s (LibSQL has no feedback tables — Postgres only); feedback writes throw a clear migration hint |
@@ -39,7 +40,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 |-----------|---------|
 | `config/` | `infrastructure.ts`, `storage.ts`, `db.ts`, `vectors.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `mcp-parse.ts`, `mcp.ts`, `schedules.ts`, `providers.ts`, `service-status.ts`, `model.ts`, `libsql-feedback-compat.ts` |
 | `processors/` | `scope-guard.ts` — the scope-enforcement engine; `security-stack.ts` — the defense-in-depth pipeline composition (spec 06) |
-| `agents/` | `scoped-instructions.ts` — instruction template paired with the guard |
+| `agents/` | `scoped-instructions.ts` — instruction template paired with the guard; `build-agent.ts` — `buildDomainAgent()` helper for creating agents with security stack + memory defaults |
 | `events/` | `event-bus.ts` (+ cross-process bridge) + barrel re-export |
 | `tools/` | `run-tool.ts`, `workspace-path.ts` |
 
