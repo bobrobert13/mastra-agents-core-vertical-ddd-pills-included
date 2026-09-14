@@ -60,3 +60,24 @@ temp/
 .qoder/better-harness-runs/
 .codegraph/
 .artifacts/
+
+# AI coding-assistant local state
+# Per-user settings, learned taste and session data must never ship in a
+# public boilerplate. Shared instruction files (AGENTS.md, CLAUDE.md) stay
+# tracked on purpose — only their tool-local state dirs are ignored here.
+.commandcode/
+.claude/settings.local.json
+.cursor/
+.continue/
+.aider*
+.windsurf/
+
+# Tool caches
+*.tsbuildinfo
+.eslintcache
+.prettiercache
+npm-debug.log*
+
+# Local overrides
+*.local
+!.env.example
