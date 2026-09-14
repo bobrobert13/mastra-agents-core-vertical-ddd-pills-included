@@ -41,7 +41,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 | `config/` | `infrastructure.ts`, `storage.ts`, `db.ts`, `vectors.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `mcp-parse.ts`, `mcp.ts`, `schedules.ts`, `providers.ts`, `service-status.ts`, `model.ts`, `libsql-feedback-compat.ts` |
 | `processors/` | `scope-guard.ts` — the scope-enforcement engine; `security-stack.ts` — the defense-in-depth pipeline composition (spec 06) |
 | `agents/` | `scoped-instructions.ts` — instruction template paired with the guard; `build-agent.ts` — `buildDomainAgent()` helper for creating agents with security stack + memory defaults |
-| `events/` | `event-bus.ts` (+ cross-process bridge) + barrel re-export |
+| `events/` | `event-bus.ts` (+ cross-process bridge) + `create-event.ts` (`createEvent` + `makeEvent` helpers for domain events) + barrel re-export |
 | `tools/` | `run-tool.ts`, `workspace-path.ts` |
 
 ## For AI Agents

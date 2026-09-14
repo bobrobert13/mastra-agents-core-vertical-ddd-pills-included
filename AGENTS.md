@@ -82,9 +82,11 @@ At startup the server prints a **service availability banner** (✅ active / ○
 ## For AI Agents
 
 ### Working In This Directory
-- **Vertical slices**: everything a domain needs lives inside its folder. Domains NEVER import from other domains — cross-domain traffic goes through `shared/events/event-bus.ts`.
+- **Vertical slices**: everything a domain needs lives inside its folder. Domains NEVER import from other domains — cross-domain traffic goes through the shared event bus.
 - Only truly cross-cutting code goes in `src/mastra/shared/`.
 - **Use `buildDomainAgent()` for creating agents** (see [Creating an Agent](#creating-an-agent) below). It enforces the Spec 06 hard rule automatically: processor arrays come from `buildSecurityStack()` (scope guard = slot 0), `inputProcessors` AND `outputProcessors` are wired, plus `scopedInstructions(scope, body)` is applied. Hand-assembling a bare `[scopeGuard]` array or omitting `outputProcessors` violates the rule. Positive-only instructions are forbidden — a capable model will otherwise answer anything. Each domain exports its `DomainScope` (plain data; siblings listed without imports) and its `*SecurityStack` (structural wiring test).
+- **Use `createEvent()` + `makeEvent()` for domain events** (see [Domain Events](#domain-events) below). Eliminates the `type`/`payload`/`timestamp` boilerplate across event definitions; `makeEvent` auto-sets the timestamp and derives the `type` from the marker so there's no string duplication.
+- **Use `requireAppDb(toolId)` for persistence tools** — throws a typed MastraError when no DB is available, replacing the repeated `getAppDb()` + null-check + `new MastraError(...)` pattern across task tools.
 - Register new agents in `src/mastra/index.ts` (agents map) — and new workflows in its `workflows` map (unregistered workflows stay invisible to `/api/workflows`; this actually happened with `deep-research`). Storage/observability wiring is already automatic.
 - Memory-enabled agents require `memory: { thread, resource }` in raw API generate calls; Studio supplies it automatically.
 - Off-topic input to a scoped agent returns empty text with a `tripwire` reason (the abort redirect) — the guard working, not a bug.
@@ -226,6 +228,39 @@ export const myAgent = buildDomainAgent({
 - `disableResponseCache` — **REQUIRED** for mutating agents (file writes, task creation, etc.)
 - `tools` — static map or async function `({ mastra }) => ({...})`
 - `overrides` — any additional `AgentConfig` fields
+
+### Domain Events
+
+All domain events are defined with `createEvent()` + `makeEvent()` from `shared/events`.
+The factory eliminates the repeated `type`/`payload`/`timestamp` boilerplate:
+
+```typescript
+import { createEvent, makeEvent } from '../../shared/events';
+
+// Definition: one line per event
+export const taskCreatedEvent = createEvent('task.created')<{
+  taskId: string;
+  title: string;
+  priority: string;
+  timestamp: Date;
+}>();
+
+// Usage: makeEvent auto-sets timestamp, type comes from the marker
+const event = makeEvent(taskCreatedEvent, { taskId: task.id, title, priority, timestamp: task.createdAt });
+await eventBus.publish(event);
+```
+
+### Persistence Tools
+
+Use `requireAppDb(toolId)` for tools that need a database connection — it throws a
+typed `MastraError` when no DB is available, replacing the repeated null-check boilerplate:
+
+```typescript
+import { requireAppDb } from '../../shared/config/db';
+
+const db = await requireAppDb('task-create'); // throws PERSISTENCE_UNAVAILABLE if no DB
+const repo = createTaskRepository(db);
+```
 
 ### Creating a Workflow
 ```typescript

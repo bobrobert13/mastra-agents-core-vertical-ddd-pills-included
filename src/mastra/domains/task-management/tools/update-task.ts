@@ -1,11 +1,13 @@
 import { createTool } from '@mastra/core/tools';
-import { MastraError, ErrorDomain, ErrorCategory } from '@mastra/core/error';
 import { z } from 'zod';
-import { getAppDb } from '../../../shared/config/db';
+import { requireAppDb } from '../../../shared/config/db';
 import { logger } from '../../../shared/logger';
-import { eventBus } from '../../../shared/events';
+import { eventBus, makeEvent } from '../../../shared/events';
 import { createTaskRepository } from '../repo';
-import type { TaskUpdatedEvent, TaskCompletedEvent } from '../events';
+import {
+  taskUpdatedEvent,
+  taskCompletedEvent,
+} from '../events';
 
 export const updateTaskTool = createTool({
   id: 'task-update',
@@ -38,15 +40,7 @@ export const updateTaskTool = createTool({
       .optional(),
   }),
   execute: async ({ taskId, title, description, status, priority, expectedVersion }) => {
-    const db = await getAppDb();
-    if (!db) {
-      throw new MastraError({
-        id: 'TASK_PERSISTENCE_UNAVAILABLE',
-        domain: ErrorDomain.TOOL,
-        category: ErrorCategory.SYSTEM,
-        text: 'update_task: no application database connection could be opened (check DATABASE_URL/LIBSQL_URL)',
-      });
-    }
+    const db = await requireAppDb('task-update');
     const repo = createTaskRepository(db);
 
     const current = await repo.getTask(taskId);
@@ -95,17 +89,18 @@ export const updateTaskTool = createTool({
       };
     }
 
-    const event: TaskUpdatedEvent = {
-      type: 'task.updated',
-      payload: { taskId, changes, timestamp: updatedRow.updatedAt },
-    };
+    const event = makeEvent(taskUpdatedEvent, {
+      taskId,
+      changes,
+      timestamp: updatedRow.updatedAt,
+    });
     await eventBus.publish(event);
 
     if (status === 'completed' && current.status !== 'completed') {
-      const completed: TaskCompletedEvent = {
-        type: 'task.completed',
-        payload: { taskId, completedAt: updatedRow.updatedAt },
-      };
+      const completed = makeEvent(taskCompletedEvent, {
+        taskId,
+        completedAt: updatedRow.updatedAt,
+      });
       await eventBus.publish(completed);
     }
 

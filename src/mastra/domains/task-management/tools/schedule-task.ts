@@ -1,11 +1,11 @@
 import { createTool } from '@mastra/core/tools';
 import type { AnySchedule } from '@mastra/core/schedules';
 import { z } from 'zod';
-import { getAppDb } from '../../../shared/config/db';
+import { requireAppDb } from '../../../shared/config/db';
 import { logger } from '../../../shared/logger';
-import { eventBus } from '../../../shared/events';
+import { eventBus, makeEvent } from '../../../shared/events';
 import { createTaskRepository } from '../repo';
-import type { TaskScheduledEvent } from '../events';
+import { taskScheduledEvent } from '../events';
 
 /**
  * schedule_task creates a real, durable **agent reminder schedule** via
@@ -121,8 +121,10 @@ export const scheduleTaskTool = createTool({
       );
     }
 
-    const db = await getAppDb();
-    if (!db) {
+    let db;
+    try {
+      db = await requireAppDb('task-schedule');
+    } catch {
       return fail('SCHEDULE_ERROR', 'No application database connection could be opened.');
     }
     const repo = createTaskRepository(db);
@@ -190,10 +192,12 @@ export const scheduleTaskTool = createTool({
       );
     }
 
-    const event: TaskScheduledEvent = {
-      type: 'task.scheduled',
-      payload: { taskId, scheduleId: row.id, interval: resolvedCron, timestamp: new Date() },
-    };
+    const event = makeEvent(taskScheduledEvent, {
+      taskId,
+      scheduleId: row.id,
+      interval: resolvedCron,
+      timestamp: new Date(),
+    });
     await eventBus.publish(event);
 
     logger.info(

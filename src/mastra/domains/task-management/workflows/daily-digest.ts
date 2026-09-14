@@ -1,13 +1,12 @@
 import { createWorkflow, createStep } from '@mastra/core/workflows';
-import { MastraError, ErrorDomain, ErrorCategory } from '@mastra/core/error';
 import { z } from 'zod';
-import { getAppDb } from '../../../shared/config/db';
 import { logger } from '../../../shared/logger';
-import { eventBus } from '../../../shared/events';
+import { eventBus, makeEvent } from '../../../shared/events';
 import { createTaskRepository } from '../repo';
 import type { TaskRepository } from '../repo';
 import type { Task } from '../entities/task';
-import type { TasksDigestReadyEvent } from '../events';
+import { tasksDigestReadyEvent } from '../events';
+import { requireAppDb } from '../../../shared/config/db';
 
 /**
  * daily-digest — LLM-free by design so it fires in zero-config /
@@ -79,15 +78,7 @@ export const collectOpenTasksStep = createStep({
     ),
   }),
   execute: async ({ inputData }) => {
-    const db = await getAppDb();
-    if (!db) {
-      throw new MastraError({
-        id: 'TASK_PERSISTENCE_UNAVAILABLE',
-        domain: ErrorDomain.MASTRA_WORKFLOW,
-        category: ErrorCategory.SYSTEM,
-        text: 'daily-digest: no application database connection could be opened',
-      });
-    }
+    const db = await requireAppDb('daily-digest');
     const repo = createTaskRepository(db);
     const window: DigestWindow = {
       date: inputData.date ?? new Date().toISOString().slice(0, 10),
@@ -143,16 +134,13 @@ export const buildDigestStep = createStep({
 
     logger.info(`[daily-digest] ${digest.openCount} open task(s) for ${inputData.date}`);
 
-    const event: TasksDigestReadyEvent = {
-      type: 'tasks.digest.ready',
-      payload: {
-        date: digest.date,
-        resourceId: inputData.resourceId,
-        openCount: digest.openCount,
-        lines: digest.lines,
-        timestamp: new Date(),
-      },
-    };
+    const event = makeEvent(tasksDigestReadyEvent, {
+      date: digest.date,
+      resourceId: inputData.resourceId,
+      openCount: digest.openCount,
+      lines: digest.lines,
+      timestamp: new Date(),
+    });
     await eventBus.publish(event);
 
     return digest;

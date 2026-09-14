@@ -1,11 +1,10 @@
 import { createTool } from '@mastra/core/tools';
-import { MastraError, ErrorDomain, ErrorCategory } from '@mastra/core/error';
 import { z } from 'zod';
-import { getAppDb } from '../../../shared/config/db';
+import { requireAppDb } from '../../../shared/config/db';
 import { logger } from '../../../shared/logger';
-import { eventBus } from '../../../shared/events';
+import { eventBus, makeEvent } from '../../../shared/events';
 import { createTaskRepository } from '../repo';
-import type { TaskCreatedEvent } from '../events';
+import { taskCreatedEvent } from '../events';
 
 export const createTaskTool = createTool({
   id: 'task-create',
@@ -25,16 +24,7 @@ export const createTaskTool = createTool({
     createdAt: z.string(),
   }),
   execute: async ({ title, description, priority = 'medium', dueDate }, context) => {
-    const db = await getAppDb();
-    if (!db) {
-      throw new MastraError({
-        id: 'TASK_PERSISTENCE_UNAVAILABLE',
-        domain: ErrorDomain.TOOL,
-        category: ErrorCategory.SYSTEM,
-        text: 'create_task: no application database connection could be opened (check DATABASE_URL/LIBSQL_URL)',
-      });
-    }
-
+    const db = await requireAppDb('task-create');
     const repo = createTaskRepository(db);
     // ToolExecutionContext has no top-level resourceId — conversation
     // identity arrives on context.agent (spec 05 §3.0).
@@ -43,15 +33,12 @@ export const createTaskTool = createTool({
     const task = await repo.createTask({ title, description, priority, dueDate, resourceId });
 
     // Emit AFTER the commit — a failed insert must not announce a task.
-    const event: TaskCreatedEvent = {
-      type: 'task.created',
-      payload: {
-        taskId: task.id,
-        title: task.title,
-        priority: task.priority,
-        timestamp: task.createdAt,
-      },
-    };
+    const event = makeEvent(taskCreatedEvent, {
+      taskId: task.id,
+      title: task.title,
+      priority: task.priority,
+      timestamp: task.createdAt,
+    });
     await eventBus.publish(event);
 
     logger.info(`[create_task] persisted task ${task.id} (resource ${resourceId})`);

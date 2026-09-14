@@ -147,6 +147,25 @@ export function getAppDb(): Promise<AppDatabase | null> {
   return appDbPromise;
 }
 
+/**
+ * Fail-fast DB resolver for tools that need persistence. Throws a typed
+ * MastraError when the database is unavailable — eliminates the repeated
+ * `if (!db) throw new MastraError(...)` boilerplate across every tool.
+ */
+export async function requireAppDb(toolId: string): Promise<AppDatabase> {
+  const { MastraError, ErrorDomain, ErrorCategory } = await import('@mastra/core/error');
+  const db = await getAppDb();
+  if (!db) {
+    throw new MastraError({
+      id: 'PERSISTENCE_UNAVAILABLE',
+      domain: ErrorDomain.TOOL,
+      category: ErrorCategory.SYSTEM,
+      text: `${toolId}: no application database connection could be opened (check DATABASE_URL/LIBSQL_URL)`,
+    });
+  }
+  return db;
+}
+
 async function openAppDb(): Promise<AppDatabase | null> {
   const target = resolveDbTarget();
   try {

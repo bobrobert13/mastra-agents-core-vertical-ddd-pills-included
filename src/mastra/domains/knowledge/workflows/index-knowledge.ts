@@ -9,7 +9,7 @@ import { MDocument } from '@mastra/rag';
 import { PgVector } from '@mastra/pg';
 
 import { logger } from '../../../shared/logger';
-import { eventBus } from '../../../shared/events/event-bus';
+import { eventBus, makeEvent } from '../../../shared/events';
 import { resolveEmbedder } from '../../../shared/config/model';
 import {
   VECTOR_STORE_NAME,
@@ -18,7 +18,7 @@ import {
   type Vector,
 } from '../../../shared/config/vectors';
 import { knowledgeContentTypeSchema, type KnowledgeContentType } from '../entities/document';
-import type { KnowledgeIndexedEvent } from '../events';
+import { knowledgeIndexedEvent, knowledgeIndexFailedEvent } from '../events';
 
 /** Index the knowledge slice writes into — the query tool shares the name. */
 export const KNOWLEDGE_INDEX_NAME = 'knowledge_docs';
@@ -226,10 +226,14 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
         // Runtime embed failure: latch off + fail the step (workflow error, not a crash).
         markEmbedderUnavailable(error instanceof Error ? error.message : String(error));
         const reason = error instanceof Error ? error.message : String(error);
-        void eventBus.publish({
-          type: 'knowledge.index-failed',
-          payload: { docId: inputData.docId, stage: 'embed', reason, timestamp: new Date() },
-        } satisfies import('../events').KnowledgeIndexFailedEvent);
+        void eventBus.publish(
+          makeEvent(knowledgeIndexFailedEvent, {
+            docId: inputData.docId,
+            stage: 'embed',
+            reason,
+            timestamp: new Date(),
+          })
+        );
         throw error;
       }
 
@@ -293,17 +297,16 @@ export function createIndexKnowledgeWorkflow(deps: IndexKnowledgeDeps = {}) {
       logger.info(
         `knowledge: indexed ${chunks.length} chunks of "${docId}" into ${KNOWLEDGE_INDEX_NAME} (${dimension}d)`
       );
-      void eventBus.publish({
-        type: 'knowledge.indexed',
-        payload: {
+      void eventBus.publish(
+        makeEvent(knowledgeIndexedEvent, {
           docId,
           indexName: KNOWLEDGE_INDEX_NAME,
           dimension,
           chunkCount: chunks.length,
           skippedChunks: 0,
           timestamp: new Date(),
-        },
-      } satisfies KnowledgeIndexedEvent);
+        })
+      );
 
       return {
         docId,
