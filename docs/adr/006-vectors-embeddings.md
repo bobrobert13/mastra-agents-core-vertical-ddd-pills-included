@@ -53,3 +53,21 @@ Repair path for the cache itself: `npm run warm:embeddings` (deletes the partial
 - **Migration note (operators):** on existing Postgres databases, changing recall `indexConfig` makes Memory drop + rebuild the vector index once; HNSW construction needs ~250 MB+ shared memory at scale — run `pgVector.buildIndex()` off-peak.
 - **Supersedes:** ADR-002's Implementation-section `embeddings` table (and its IVFFLAT index, trigger function and triggers) — deleted from `docker/init.sql` (spec 03 §3.8); `PgVector.createIndex` owns `mastra_<indexname>` tables. ADR-002's decision itself stands (Postgres + pgvector remains the production store).
 - **Out of scope:** rerank default (needs an LLM per search → open question, opt-in env later), GraphRAG, hybrid/sparse search, history backfill (recall covers new messages only).
+
+## Amendment (2026-09-17, third pass — the embedder declared in ONE env var)
+
+`EMBEDDING_MODEL=provider/model` covered the curated ids but not the real cases: a self-hosted or third-party **OpenAI-compatible** endpoint (own base URL, own key, extra headers), or a model whose dimension is not in `EMBEDDING_MODELS`. The whole declaration now fits in a single JSON variable.
+
+**Decision.** `resolveEmbedder()` (extracted to `shared/config/embedder.ts`; `model.ts` re-exports it so no import moved) resolves in this order:
+
+1. `SEMANTIC_RECALL=off` → `none` (kill-switch, unchanged).
+2. `EMBEDDING_CONFIG` → `parseEmbeddingConfig()` (`shared/config/embedding-parse.ts`, pure, zod `.strict()`, `${VAR}` interpolation on `apiKey`/`url`/headers) → `new ModelRouterEmbeddingModel({ id } | { providerId, modelId }, url?, apiKey?, headers?)`.
+3. `EMBEDDING_MODEL` (legacy `provider/model` string) → byte-identical to the previous behavior.
+4. Unset → local fastembed multilingual-E5 (1024d, key-free).
+
+`ModelRouterEmbeddingModel` already accepts `OpenAICompatibleConfig` (`url`/`apiKey`/`headers`), so **third-party endpoints need no new dependency**. `dimension` is taken from the config, else from the curated list; for a non-curated model it stays `undefined` and Mastra probes it at runtime exactly as before.
+
+**Presence is the only failure mode.** Absent/blank ⇒ legal, fall through to the next source (founding promise). PRESENT but malformed ⇒ `parseEmbeddingConfig` throws from `buildVectors()` at boot with the `[Embeddings] Invalid EMBEDDING_CONFIG …` family (same precedent as a malformed `MCP_SERVERS` in `buildMcpClient`). A valid config the router refuses degrades to `none` with one warn — never a crash (ADR-006's degrade contract).
+
+**Consequences.** Sticky dimensions are untouched: declaring `dimension` does not make an index portable — a different dimension is still a re-index event (`VectorDimensionMismatchError` in the knowledge workflow, a silent cold reset for Memory recall, G3). Rerank stays out of scope.
+
