@@ -51,7 +51,7 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 
 ## How It Works — Optional Infrastructure
 
-**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `vectors.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts`, schedules reporting in `schedules.ts`):
+**Rule: no env var ⇒ no error, the service is simply inactive.** The composition root is `src/mastra/shared/config/infrastructure.ts`; each service builder lives in its own module (`storage.ts`, `vectors.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `providers.ts`, banner in `service-status.ts`, model resolution in `model.ts` + `embedder.ts`/`embedding-parse.ts`, schedules reporting in `schedules.ts`):
 
 | Service | Activated by | Fallback when unset |
 |---------|-------------|---------------------|
@@ -59,17 +59,17 @@ AGENTS.md                        ← you are here (rules, conventions, updates, 
 | Storage: LibSQL custom | `LIBSQL_URL` (only if no DATABASE_URL) | — |
 | Storage: default | — | LibSQL local `file:./mastra.db` |
 | Vector store | follows storage: `DATABASE_URL` postgres → PgVector; else LibSQLVector | always built unless `SEMANTIC_RECALL=off` (ADR-006) |
-| Semantic recall | embedder available (`EMBEDDING_MODEL` → ModelRouter; unset → local fastembed E5, key-free) | `○ Semantic recall  off (no embedder)` — generate unaffected, plain history only |
-| Knowledge RAG | same embedder condition | `index-knowledge` workflow + `search_knowledge` tool registered / `off (no embedder)` |
+| Semantic recall | embedder available (`EMBEDDING_CONFIG` — one JSON var carrying the whole model, incl. third-party OpenAI-compatible endpoints — > `EMBEDDING_MODEL` → ModelRouter; unset → local fastembed E5, key-free) | `○ Semantic recall  off (no embedder)` — generate unaffected, plain history only |
+| Knowledge RAG | same embedder condition | `index-knowledge` workflow + `search_knowledge` tool **registered**; the tool is **opt-in per agent** (`connectors: { rag: true }` — no agent ships with it) / `off (no embedder)` |
 | PubSub (workers HA) | `REDIS_URL` → Redis Streams (ADR-005; also bridges the domain event bus across processes) | in-process EventEmitterPubSub; split workers unavailable |
 | Auth (Server & Studio) | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN` → worker bearer via CompositeAuth) | dev: inert + ⚠️ UNAUTHENTICATED banner line; **production: FATAL exit(1)** unless `AUTH_DISABLED=true` (ADR-004) |
 | Observability | enabled by default | disable with `ENABLE_OBSERVABILITY=false` |
 | Chat request trace | default ON outside production (`CHAT_TRACE=on|off` overrides) | `CHAT_TRACE=off` — the `/chat/:agentId` pipeline trace goes silent (diagnostics only, nothing else watches it) |
 | Model providers | any of `DEEPINFRA_API_KEY`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY` | agents 401 at call time, app still boots |
-| Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`) | built-in default `openai/gpt-4o-mini` |
+| Model selection | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL` (see `shared/config/model.ts`); the embedder is declared separately in one JSON var — `EMBEDDING_CONFIG` > `EMBEDDING_MODEL` (see `shared/config/embedder.ts`) | built-in default `openai/gpt-4o-mini` |
 | Eval datasets/experiments | `EVAL_STORAGE_URL` (seed script default `file:./eval-ci.db`; suites default `:memory:`) | native `mastra.datasets` storage domain (ADR-010); git JSON = reviewed seed source |
 | Eval judge model | `EVAL_JUDGE_MODEL` (> `MODEL` > `DEFAULT_MODEL`) | judges only; code-based scorers never call a model (spec 07) |
-| Scope guard | on by default (`SCOPE_GUARD_MODE=redirect|block`, `SCOPE_GUARD_MODEL` optional) | `SCOPE_GUARD=off` disables; inert (fail-open) with no provider key |
+| Scope guard | on by default (`SCOPE_GUARD_MODE=redirect|block`, `SCOPE_GUARD_TONE=warm|formal|neutral`, `SCOPE_GUARD_MODEL` optional; a domain overrides the voice in its `scope.ts` `refusal`) | `SCOPE_GUARD=off` disables; inert (fail-open) with no provider key |
 | MCP client (inbound) | `MCP_SERVERS` (JSON; `${VAR}` interpolation; `agents` routing key) | `○ MCP client` off — set `MCP_SERVERS` to connect external servers; set-but-invalid JSON **fails boot** (spec 04) |
 | MCP server (outbound) | `ENABLE_MCP_SERVER=true` (exact string) | `○ MCP server` disabled — read-only surface; requires Spec 01 auth outside localhost |
 | Guardrails (spec 06) | on by default; LLM detectors (injection/PII) need a provider key | `○ Guardrails …` — `SECURITY_PROCESSORS=off` removes all but the scope guard; TokenLimiter/ResponseCache/workspace jail stay active keyless |
@@ -122,10 +122,10 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 2. Built-in Mastra tools (`webSearchTool`, etc.) only support OpenAI/Anthropic/Google/xAI — on any other provider write a custom tool (the DuckDuckGo `web-search.ts` in the research domain is the reference pattern).
 3. `Agent` class does NOT expose `tools`/`memory`/`instructions` publicly — unit tests can only assert `id`, `name`, `model`.
 4. `@mastra/core/scores` does not exist in current version — scorers use the per-domain pattern in `research/scorers/`.
-5. **Never hard-code a model string** — always `agentModel.<key>()` / `memoryModel()` from `shared/config/model.ts` (`provider/model-id` format, e.g. `deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731`, `anthropic/claude-sonnet-4-5`, `ollama/llama3.1`).
+5. **Never hard-code a model string** — always `agentModel.<key>()` / `memoryModel()` from `shared/config/model.ts` (`provider/model-id` format, e.g. `deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731`, `anthropic/claude-sonnet-4-5`, `ollama/llama3.1`). The embedder is resolved separately by `resolveEmbedder()` (`shared/config/embedder.ts`) — see gotcha #24.
 6. `mastra build` writes to `.mastra/output/`; scripts referencing `dist/` are wrong.
 7. **Agents answer anything unless hard-guarded (real incident 2026-09-13)**: asked "qué pasó en la resurrección de Cristo?", the file-operations agent replied from general knowledge AND hallucinated a `read nonexistent-file` tool call. Positive-only instructions do NOT scope an agent. Fix = `createScopeGuard()` (LLM classifier decides in/out BEFORE the primary model) + `scopedInstructions()`; guard is on by default (`SCOPE_GUARD=off` to disable) and fails open when no provider key exists (banner shows "Scope guard: inert"). **Policy (2026-09-17, after a client-side incident): OUT is reserved for a SUBSTANTIVE request owned by another domain — conversational input (greetings, thanks, acknowledgements), questions about the agent itself and short follow-ups PASS.** The first prompt was a bare "strict topic classifier" with general-knowledge questions in the out-of-scope list, so a chat client that opens with "hola" got the scope notice on the very first message of a new thread. The contract is the prompt text itself, now an exported pure function (`buildScopeClassifierPrompt()`) so it is provable offline (`tests/unit/shared/processors/scope-guard.test.ts`) plus a live regression in `tests/integration/scope-guard-live.test.ts`.
-   **OUT behaviour is mode-based since 2026-09-17 (second pass).** A hard cut turned a cross-domain request into a block notice instead of a reply. `SCOPE_GUARD_MODE=redirect` (default) REPLACES the classified message's text with a declarative note (`buildRedirectInstruction`) so the AGENT answers the refusal in the user's language while the **model never sees the request** — the guarantee that makes the guard a guard. `block` restores the original `abort()` (TripWire before the model + client-side notice). The note is deliberately DECLARATIVE: the injection detector runs AFTER the guard and reads it as user input, and an imperative wording ("must not be answered", "do not mention these instructions") is classified as `system-override` → the detector aborts the turn (reproduced against the real detector; the unit test locks the contract). Language of the note is picked by `detectMessageLanguage()` (es/en heuristic) because the model mirrors the language of the last message.
+   **The OUT copy is toned and SHORT since 2026-09-17 (third pass).** The note used to dump the sibling catalog ("Research Agent (…); Task Management Agent (…); …") and the model recited it: verbose, identical for every client, always in the flattest register. Now the note carries no catalog (the system prompt already lists the agents as context) and asks for ONE warm sentence in the user's language, naming at most ONE fitting alternative; the voice comes from `DomainScope.refusal.tone` (per domain) or `SCOPE_GUARD_TONE` (global, `warm` default). Mode `block` aborts with `buildRefusalLine()` — a natural one-liner instead of a paragraph. The copy lives in `shared/processors/scope-messaging.ts` (pure, offline-provable) and the DECLARATIVE constraint above still holds: the anti-imperative assertion was widened and its own regex bug fixed (`[System]` unescaped was a character class, i.e. a false negative).
 8. LibSQL does NOT implement the observability **feedback** methods (`listFeedback`, aggregates, write) — Studio's feedback tab 500s without `shared/config/libsql-feedback-compat.ts` being wired into every LibSQL instance. Full feedback surface = PostgreSQL only.
 9. **Auth protects `/api/*` + Studio but NOT root `/health`** — defaults are protected `["/api/*"]`, public `["/api","/api/auth/*"]`, and `/health` lives at root, so the compose healthcheck keeps working unauthenticated. With `NODE_ENV=production` and no auth the process refuses to boot (`MASTRA_JWT_SECRET`, or the explicit `AUTH_DISABLED=true` escape hatch). A custom `server.apiPrefix` breaks those defaults — `buildAuth` rewrites protected/public from `MASTRA_API_PREFIX` and warns; any new root-level route is public by default. Studio login (JWT-capable) = Settings → Headers → `Authorization: Bearer <jwt>`.
 10. **Prod HA needs `REDIS_URL`** — split workers (orchestration/scheduler/backgroundTasks) do not start against the in-process default (docs); exactly ONE scheduler replica fleet-wide or every cron tick fires twice. The domain `eventBus` bridges cross-process ONLY when `REDIS_URL` is set (ADR-005); without it it is a single-process EventEmitter by design.
@@ -142,14 +142,17 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 21. **The `/chat/:agentId` stream does not START until the guardrail prelude finishes — and that prelude costs 9-20 s measured with DeepInfra**: `chatRoute` awaits `agent.stream()`, which runs memory recall (~1.9 s), the scope-guard classifier (~1.3 s) and the injection detector (~1.8 s) BEFORE the model's first token. No header is written to the socket in the meantime, so **a client connection budget shorter than that aborts a healthy turn**: the reference consumer's BFF did exactly this with a 10 s `connect_timeout` (`502 upstream_unreachable` on a turn that later completed) while the backend logged nothing — from its side the client just hung up (this was the "UI shows the generic error, backend is clean" incident, 2026-09-17). Budget `AGENT_CONNECT_TIMEOUT` ≥ 30 s; the fix direction here is latency, never a shorter timeout.
 22. **The chat pipeline is traced per request now** (`shared/observability/request-trace.ts` + `routes/middleware/request-trace.ts`): one line per event — entry (`→ POST /chat/comms msgs=1 thread=…`), one line per processor with verdict and duration (`· scope-guard:communication ok 1.25s` / `block` / `fail`), TTFB (`← 200 ttfb=8.90s`, i.e. the end of the prelude) and close (`✓ done 12.40s first-byte=… bytes=…`). It is ON outside production; `CHAT_TRACE=on|off` overrides; the short id travels back as the `x-mastra-trace` response header. The processor timing is a transparent Proxy — identity, options and `instanceof` are preserved, so structural tests and private fields keep working.
 23. **LLM detectors on a provider WITHOUT structured outputs need `instructions` that name the schema keys LITERALLY** (DeepInfra/DeepSeek): the zod schema only reaches the prompt there, and a model that invents keys fails validation and leaves the detector INERT while still paying the call — the injection detector did it (`{"severity":…}`, fixed in `createInjectionDetector`) and so did the PII detector (`redacted_content` missing → `[PIIDetector] Detection agent failed, allowing content` ~1.7 s/turn, fixed in `buildPiiDetectionInstructions`). Both output contracts live in `security-stack.ts`; keep them if you switch providers.
+24. **The embedder is declared in ONE env var and it is not a plain model id** (`EMBEDDING_CONFIG`, 2026-09-17): a JSON object carrying the WHOLE declaration — `id: "provider/model"` OR `providerId`+`modelId`, plus optional `dimension`/`url`/`apiKey`/`headers` — so a self-hosted or third-party OpenAI-compatible endpoint needs no new dependency (`ModelRouterEmbeddingModel` already accepts `OpenAICompatibleConfig`). Precedence: `SEMANTIC_RECALL=off` > `EMBEDDING_CONFIG` > `EMBEDDING_MODEL` (legacy string, still supported byte-for-byte) > local fastembed. ABSENT is always legal; PRESENT-but-malformed fails the boot with `[Embeddings] Invalid EMBEDDING_CONFIG …` (same precedent as a malformed `MCP_SERVERS`). `${VAR}` is interpolated from the environment and an unset VAR fails the boot. Declaring `dimension` does NOT make an index portable — gotcha #12 still applies. Parser: `shared/config/embedding-parse.ts` (pure, zod `.strict()`, offline-testable); resolution: `shared/config/embedder.ts`.
+25. **RAG is OPT-IN per agent and the default is OFF** (2026-09-17): the composition root still registers `search_knowledge` in the root `tools` registry whenever an embedder resolves (that half is unchanged and DoD-tested), but **no agent receives it** unless its `config.ts` declares `connectors: { rag: true }` — before this, the research agent resolved it dynamically on every build. The same `connectors` object declares `memory` (`'basic'` default | `'observational'`; there is no "off" — `chatRoute` requires memory) and `mcp` (the `MCP_SERVERS` routing key: unset ⇒ no discovery, no subprocess), and tools from a connector are merged so that local `tools` win on collision. The domain table (`agentName`/`scope`/the sibling blurbs) lives ONCE in `shared/agents/domain-catalog.ts`: a domain's `scope.ts` reads `DOMAIN_CATALOG` + `siblingsOf()` instead of copying it, and its `refusal.tone` overrides `SCOPE_GUARD_TONE` for that domain.
 
 ## Development Workflow
 
 ### Adding a New Domain
-1. Create `src/mastra/domains/<domain-name>/` with `agent.ts` (scope + guard wired — see gotcha #7), `tools/`, optional `workflows/`, `scorers/`, `entities/`, `events.ts`, `index.ts` (barrel exports the agent, `*Scope` and `*ScopeGuard`).
-2. Register agent (and any workflow) in the `agents`/`workflows` maps of `src/mastra/index.ts`.
-3. Add `tests/unit/domains/<domain>/`, `tests/evals/<domain>.eval.test.ts`.
-4. Document in `docs/domains/<domain>.md` and add an `AGENTS.md` for the domain folder.
+1. Create `src/mastra/domains/<domain-name>/` with the four one-responsibility files (`scope.ts` / `config.ts` / `instructions.ts` / `agent.ts` — see [Creating an Agent](#creating-an-agent)), plus `tools/`, optional `workflows/` (steps in `workflows/steps/`, shared shapes in `workflows/schemas.ts`), `scorers/`, `entities/`, `events.ts` and `index.ts` (barrel: the agent, `*Scope`, `*ScopeGuard`, `*SecurityStack` — the only import surface).
+2. Add its entry to `shared/agents/domain-catalog.ts` (`agentName` / `scope` / short `description`): that ONE table feeds the siblings of every domain, so no domain copies it.
+3. Register the agent (and any workflow) in the `agents`/`workflows` maps of `src/mastra/index.ts`.
+4. Add `tests/unit/domains/<domain>/`, `tests/evals/<domain>.eval.test.ts`; keep every file ≤150 LOC (`tests/unit/structure/file-size.test.ts` enforces it).
+5. Document in `docs/domains/<domain>.md` and add an `AGENTS.md` for the domain folder.
 
 ### Adding a New Tool
 1. `src/mastra/domains/<domain>/tools/<tool-name>.ts` with `createTool()` + Zod schemas.
@@ -160,11 +163,13 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 ```bash
 npm run test:all        # smoke → unit → integration → evals
 npm run test:smoke      # zero-config boot of the real instance
-npm run test:unit       # fast deterministic
+npm run test:unit       # fast deterministic (includes the file-size ratchet)
+npm run test:unit -- structure   # only the granularity ratchet
 npm run test:integration
 npm run test:evals      # structural today (offline-safe), live when skipIf-guarded
 npm run test:unit -- domains/research   # one area
 ```
+The ratchet in `tests/unit/structure/file-size.test.ts` fails a domain file over 150 LOC and a `shared/` file over 200 LOC unless it is declared in `LEGACY_LARGE` — and an allowlist entry that no longer exceeds the ceiling ALSO fails, so the debt can only shrink.
 
 ## Common Patterns
 
@@ -192,23 +197,57 @@ export const myTool = createTool({
 
 ### Creating an Agent
 
-**Use `buildDomainAgent()`** — it wires the security stack, memory, and scorers automatically while enforcing the Spec 06 hard rule (scope guard = slot 0, both `inputProcessors` AND `outputProcessors`).
+**Use `buildDomainAgent()`** — it wires the security stack, memory, and scorers automatically while enforcing the Spec 06 hard rule (scope guard = slot 0, both `inputProcessors` AND `outputProcessors`). A domain spreads that across four one-responsibility files, all of them short (the structural test in `tests/unit/structure/file-size.test.ts` keeps them that way):
+
+```
+domains/<domain>/
+├── scope.ts         # DomainScope: boundaries only (name/scope/siblings come from the catalog)
+├── config.ts        # the knobs: modelKey, maxSteps, connectors, disableResponseCache
+├── instructions.ts  # the capability body (scopedInstructions prepends the hard boundary)
+├── agent.ts         # ~20 lines: the builder call + the 3 exports tests reference
+└── index.ts         # barrel — the only import surface
+```
 
 ```typescript
-import {
-  buildDomainAgent,
-  createScopeGuard,
-  type DomainScope,
-} from '../../shared/agents/build-agent';
-import { buildSecurityStack } from '../../shared/processors/security-stack';
+// domains/my-domain/scope.ts
+import { DOMAIN_CATALOG, siblingsOf } from '../../shared/agents/domain-catalog';
+import type { DomainScope } from '../../shared/processors/scope-guard';
+
+const entry = DOMAIN_CATALOG.research; // ← this domain's catalog entry
 
 export const myScope: DomainScope = {
   domain: 'my-domain',
-  agentName: 'My Agent',
-  scope: 'the ONE thing this agent does',
+  agentName: entry.agentName, // single source: shared/agents/domain-catalog.ts
+  scope: entry.scope,
   outOfScopeExamples: ['...'],
-  siblings: [/* the other agents, as plain data */],
+  siblings: siblingsOf('my-domain'), // plain data — no cross-domain imports
+  refusal: { tone: 'warm', maxSentences: 1 }, // the voice of THIS domain's denial
 };
+```
+
+```typescript
+// domains/my-domain/config.ts
+import type { DomainAgentSettings } from '../../shared/agents/build-agent';
+
+export const mySettings: DomainAgentSettings = {
+  modelKey: 'myDomain', // precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL
+  maxSteps: 30,
+  connectors: {
+    // memory: 'basic' (default) | 'observational' (compaction + semantic recall)
+    // rag: true,         // OPT-IN: wires search_knowledge from the root registry
+    // mcp: 'my-domain',  // MCP_SERVERS routing key (`agents: [...]`)
+  },
+};
+```
+
+```typescript
+// domains/my-domain/agent.ts
+import { buildDomainAgent, createScopeGuard } from '../../shared/agents/build-agent';
+import { buildSecurityStack } from '../../shared/processors/security-stack';
+import { myScope } from './scope';
+import { mySettings } from './config';
+import { myInstructions } from './instructions';
+import { myTool } from './tools';
 
 // Kept for backward compat — structural wiring tests reference these
 export const myScopeGuard = createScopeGuard(myScope);
@@ -219,18 +258,16 @@ export const mySecurityStack = buildSecurityStack({
 
 export const myAgent = buildDomainAgent({
   scope: myScope,
-  instructionsBody: `You are a specialist...`,
-  modelKey: 'myDomain', // precedence: MODEL_<AGENT> > MODEL > DEFAULT_MODEL
-  enableObservationalMemory: true, // optional: compaction + semantic recall
-  disableResponseCache: true, // REQUIRED for mutating agents
+  instructionsBody: myInstructions,
   tools: { my_tool: myTool },
+  ...mySettings,
 });
 ```
 
 **Key options:**
 - `instructionsBody` — agent-specific instructions (scoped instructions are prepended automatically)
 - `modelKey` — defaults to `scope.domain`; maps to `agentModel.<key>()`
-- `enableObservationalMemory` — adds compaction + semantic recall (default: false)
+- `connectors` — the agent's capabilities, declared instead of hand-wired: `memory` (`'basic'` default, `'observational'` adds compaction + recall), `rag` (**opt-in** `search_knowledge` from the root registry — nothing is wired without it), `mcp` (the `MCP_SERVERS` routing key whose tools the agent receives; no key ⇒ no discovery, no subprocess). Tools resolved by a connector are merged FIRST, so local `tools` win on key collision
 - `disableResponseCache` — **REQUIRED** for mutating agents (file writes, task creation, etc.)
 - `tools` — static map or async function `({ mastra }) => ({...})`
 - `overrides` — any additional `AgentConfig` fields

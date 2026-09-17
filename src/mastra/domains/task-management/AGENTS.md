@@ -1,33 +1,38 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-09-12 | Updated: 2026-09-26 (Spec 05) -->
+<!-- Generated: 2026-09-12 | Updated: 2026-09-17 -->
 # task-management
 
 ## Purpose
 
 Task and schedule vertical slice: a Task entity backed by a REAL repository
-(`app_tasks` custom table via `shared/config/db.ts` — ADR-008), lifecycle
-events the tools genuinely publish (`task.created` / `task.updated` /
-`task.completed` / `task.scheduled` / `tasks.digest.ready`), an agent-reminder
-scheduling tool wired to `mastra.schedules`, and a declaratively-scheduled
-LLM-free `daily-digest` workflow. Reference implementation for domain-owned
-persistence + event emission.
+(`app_tasks` custom table via `shared/config/db.ts` — ADR-008, now a `repo/`
+directory), lifecycle events the tools genuinely publish (`task.created` /
+`task.updated` / `task.completed` / `task.scheduled` / `tasks.digest.ready`),
+an agent-reminder scheduling tool wired to `mastra.schedules`, and a
+declaratively-scheduled LLM-free `daily-digest` workflow. Reference
+implementation for domain-owned persistence + event emission.
 
 ## Key Files
 
 | File | Description |
 |------|-------------|
-| `agent.ts` | `task-management-agent` / "Task Management Agent"; model via `agentModel.tasks()` — env-driven; Memory + observationalMemory via `memoryModel()`; exports `taskManagementScope` + `taskManagementScopeGuard` (hard scope enforcement) |
-| `repo.ts` | `createTaskRepository(db)` over the `app_tasks` table (spec 05 §3.2/§3.3): UUID ids, `resource_id` (default `'default'`), `version` optimistic-lock column, ISO-8601 TEXT timestamps; `ensureSchema()` idempotent + additive (one DDL for LibSQL and Postgres); dialect-portable placeholders |
+| `agent.ts` | Composition root: `buildDomainAgent({ scope, instructionsBody, tools: { create_task, update_task, schedule_task }, ...taskManagementSettings })`. Fixes the three structural-test exports: `taskManagementAgent`, `taskManagementScopeGuard`, `taskManagementSecurityStack` |
+| `scope.ts` | `taskManagementScope` (`DomainScope`): `agentName`/`scope`/`siblings` read from `shared/agents/domain-catalog.ts` (`DOMAIN_CATALOG['task-management']` + `siblingsOf('task-management')`); only `outOfScopeExamples` and `refusal: { tone: 'warm' }` are local |
+| `config.ts` | `taskManagementSettings` (`modelKey: 'tasks'`, `maxSteps: 30`, `connectors: { memory: 'observational' }`) + domain constants: `TASK_MANAGEMENT_AGENT_ID`, `TASK_SCHEDULE_ID_PREFIX`, `TASK_INTERVAL_RE`, `DIGEST_SCHEDULE_CRON` / `DIGEST_SCHEDULE_TIMEZONE` |
+| `instructions.ts` | `taskManagementInstructions` — capability body; `scopedInstructions()` prepends the scope/refusal block |
 | `entities/task.ts` | `Task` (+ optional `resourceId`/`version`); `TaskStatus` = pending \| in-progress \| completed; `TaskPriority` = low \| medium \| high; `TaskSchedule` (legacy shape) |
 | `events.ts` | `task.created` / `task.updated` / `task.completed` / `task.scheduled` / `tasks.digest.ready` contracts — published for real by the tools/steps |
-| `index.ts` | Barrel: agent, tools, entity/event types, `createTaskRepository` (+ repo types), `dailyDigestWorkflow` |
+| `index.ts` | Barrel: agent, scope/guard/security stack, tools, entity/event types, `createTaskRepository` (+ repo types via `./repo`), `dailyDigestWorkflow` |
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
-| `tools/` | `create-task.ts` (INSERT + `task.created`; `resourceId` from `context.agent?.resourceId ?? 'default'`; output carries priority/dueDate), `update-task.ts` (guarded `UPDATE … WHERE id=? AND version=?`; honest `NOT_FOUND` / `CONFLICT` outcomes + current row; emits `task.updated`, plus `task.completed` on →completed), `schedule-task.ts` (real agent-reminder schedule via `context.mastra.schedules` — id `task-<taskId>`, normalized by the API to `agent_task-<slug>`; create-or-update = idempotent tool over a throwing API; degrades `SCHEDULING_UNAVAILABLE` without the runtime; interval `15m/1h/2d` → cron for back-compat; writes `schedule_id` onto the task row; emits `task.scheduled`) + barrel |
-| `workflows/` | `daily-digest.ts`: 2-step LLM-free digest (`collect-open-tasks` → `build-digest`, uses `listTasks({ excludeStatus: 'completed' })`), declares `schedule: { cron: '0 9 * * *', timezone: 'UTC' }` → storage row `wf_daily-digest`; **must be registered** in `src/mastra/index.ts` `workflows` map; publishes `tasks.digest.ready` |
+| `repo/` | Repository split into four modules under the SAME public path `.../task-management/repo`: `index.ts` (barrel — re-exports exactly what `repo.ts` did), `schema.ts` (`CREATE_TABLE_SQL`/`CREATE_INDEX_SQL`, `ADDITIVE_COLUMN_MIGRATIONS`, memoized `createEnsureSchema`), `types.ts` (contracts: `CreateTaskInput`, `UpdateTaskPatch`, `ListTasksFilter`, `TaskRepository`, `TaskRow`), `task-repository.ts` (`createTaskRepository(db)` — full CRUD, dialect-portable placeholders) |
+| `schedule/` | `interval.ts` (`intervalToCron`: `15m`/`1h`/`2d` → cron via `TASK_INTERVAL_RE`), `schemas.ts` (`schedule_task` I/O schemas + the typed `scheduleFailureReasonSchema` enum), `sync.ts` (`syncTaskSchedule` create-or-update, idempotent per task; recovers from the non-idempotent storage API's `SCHEDULES_ID_EXISTS` race) |
+| `entities/` | `task.ts` — the `Task` entity + `TaskStatus`/`TaskPriority` enums and the legacy `TaskSchedule` shape |
+| `tools/` | `create-task.ts` (INSERT + `task.created`; `resourceId` from `context.agent?.resourceId ?? 'default'`; output carries priority/dueDate), `update-task.ts` (guarded `UPDATE … WHERE id=? AND version=?`; honest `NOT_FOUND` / `CONFLICT` outcomes + current row; emits `task.updated`, plus `task.completed` on →completed), `schedule-task.ts` (real agent-reminder schedule via `context.mastra.schedules` — id `task-<taskId>`, normalized by the API to `agent_task-<slug>`; create-or-update through `schedule/sync.ts`; degrades `SCHEDULING_UNAVAILABLE` without the runtime; interval → cron for back-compat; writes `schedule_id` onto the task row; emits `task.scheduled`) + barrel |
+| `workflows/` | `daily-digest.ts` (composition only, ~38 LOC: `collect-open-tasks` → `build-digest`; re-exports `collectOpenTasksStep`, `collectOpenTasks`, `buildDigestStep`, `buildDigest`, `DigestWindow` so the historic import surface is unchanged; declares `schedule: { cron, timezone }` → storage row `wf_daily-digest`; **must be registered** in `src/mastra/index.ts` `workflows` map; publishes `tasks.digest.ready`), `schemas.ts` (shared inter-step Zod — `DigestWindow`, `openTaskSchema`, `dailyDigestInputSchema`), `steps/{collect-open-tasks,build-digest}.ts` (one step per module) |
 
 ## For AI Agents
 
@@ -35,7 +40,7 @@ persistence + event emission.
 - Persistence goes through `shared/config/db.ts` → `getAppDb()` (same URL
   resolution as Mastra storage: `DATABASE_URL` postgres → pg; `LIBSQL_URL` →
   libsql; fallback `file:./mastra.db`). Never open ad-hoc connections.
-  `app_tasks` is owned by `repo.ts` and lives OUTSIDE Mastra's migration
+  `app_tasks` is owned by `repo/schema.ts` and lives OUTSIDE Mastra's migration
   system — future column additions = entries in `ADDITIVE_COLUMN_MIGRATIONS`
   (ADR-008; root `AGENTS.md` gotcha #12). Mastra prune/retention never
   touches app tables.
@@ -51,6 +56,11 @@ persistence + event emission.
   disables it (`wf_daily-digest` registers but never fires); exactly ONE
   scheduler instance across the fleet.
 
+### Connectors & Domain Table
+- Connectors are DECLARED in `config.ts` (`taskManagementSettings.connectors`), never hand-wired in `agent.ts`. `memory: 'observational'` replaces the retired `enableObservationalMemory` flag.
+- RAG is opt-in: an agent receives `search_knowledge` ONLY when it declares `connectors: { rag: true }` in its `config.ts` — without that key it does not get the tool even though it stays registered in the root Mastra `tools` registry (`src/mastra/index.ts`). `taskManagementSettings` declares no `rag`, so this agent does not receive it.
+- The domain table (agent name, long scope line, sibling descriptions) lives once in `shared/agents/domain-catalog.ts`; `scope.ts` reads `DOMAIN_CATALOG['task-management']` + `siblingsOf('task-management')` — never re-copy sibling strings locally.
+
 ### Testing Requirements
 - Unit (`tests/unit/domains/task-management/`): `repo.test.ts` on `:memory:`
   LibSQL (CRUD, optimistic-lock conflict, resource scoping, reopen-after-close
@@ -58,6 +68,11 @@ persistence + event emission.
   = ':memory:'` + `resetAppDb()`); `schedule-task.test.ts` uses a fake
   `schedules` stub through `runTool`'s third `contextOverrides` argument;
   `workflows/daily-digest.test.ts` executes the exported steps directly.
+- Structural ratchet: `tests/unit/structure/file-size.test.ts` caps every file
+  under `domains/` at **150 LOC** (no allowlist for domains; `shared/` is 200
+  with a shrinking allowlist). This domain sits right at the limit — split big
+  files by responsibility (`agent`/`scope`/`config`/`instructions`/`steps`/
+  `repo`/`schedule`) rather than growing one.
 - Integration (`tests/integration/task-persistence-schedules.test.ts`): the
   repo suite re-run on PostgreSQL is gated `skipIf(!DATABASE_URL postgres)`;
   the offline `mastra.schedules` probe asserts `agent_` id normalization,
@@ -69,11 +84,13 @@ persistence + event emission.
 
 ### Internal
 - `shared/logger.ts`, `shared/events/event-bus.ts`, `shared/config/db.ts`
-  (`getAppDb` / `AppDatabase` — shared connection factory, domain-owned tables)
+  (`getAppDb` / `AppDatabase` — shared connection factory, domain-owned tables),
+  `shared/agents/build-agent.ts` (`buildDomainAgent`), `shared/agents/domain-catalog.ts`,
+  `shared/processors/security-stack.ts`
 
 ### External
-- `@mastra/core/agent`, `@mastra/core/tools`, `@mastra/core/workflows`,
-  `@mastra/core/schedules` (types), `@mastra/memory`, `zod`;
+- `@mastra/core/tools`, `@mastra/core/workflows`, `@mastra/core/schedules` (types), `zod`;
+  the `Agent`/memory packages arrive via `shared/agents/build-agent.ts`, and
   DB drivers arrive only via `shared/config/db.ts` (`@libsql/client`, `pg`)
 
 <!-- MANUAL: -->

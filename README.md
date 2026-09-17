@@ -121,7 +121,7 @@ through them ([ADR-009](docs/adr/009-guardrails-security-processor-pipeline.md))
 
 | Domain            | Agent                    | Tools / internals                                                                            | Workflows                                                    | Notable                                                                                                           |
 | ----------------- | ------------------------ | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
-| `research`        | `research-agent`         | `web_search` (key-free DuckDuckGo), `web_fetch`, `summarize`                                 | `deep-research` (4 steps + **suspend-for-review**)           | reference pattern for provider-agnostic tools; consumes `search_knowledge` via the tools registry                 |
+| `research`        | `research-agent`         | `web_search` (key-free DuckDuckGo), `web_fetch`, `summarize`                                 | `deep-research` (4 steps + **suspend-for-review**)           | reference pattern for provider-agnostic tools; `search_knowledge` is **opt-in** (`connectors: { rag: true }`)     |
 | `task-management` | `task-management-agent`  | `create_task`, `update_task` (optimistic locking), `schedule_task` (real `mastra.schedules`) | `daily-digest` — declarative `0 9 * * *` UTC cron            | reference for **domain-owned persistence** (`app_tasks` beside Mastra's tables, ADR-008) and event-emitting tools |
 | `file-operations` | `file-operations-agent`  | `read_file`, `write_file`, `edit_file` — jailed + approval-gated                             | —                                                            | reference for LLM-exposed FS access done safely (ADR-009)                                                         |
 | `communication`   | `communication-agent`    | `ask_user` (structured)                                                                      | —                                                            | minimal slice skeleton                                                                                            |
@@ -133,7 +133,8 @@ through them ([ADR-009](docs/adr/009-guardrails-security-processor-pipeline.md))
 | ------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | `storage.ts` + `db.ts`    | `DATABASE_URL` (postgres) / `LIBSQL_URL`                                           | LibSQL `file:./mastra.db`; both share one URL resolver                                     |
 | `vectors.ts`              | follows storage (PgVector / LibSQLVector) + embedder ladder                        | semantic recall off; **never crashes**                                                     |
-| `model.ts`                | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL`, `EMBEDDING_MODEL`, `EVAL_JUDGE_MODEL` | `openai/gpt-4o-mini` + local fastembed E5 (key-free, 1024d)                                |
+| `model.ts`                | `MODEL` / `MODEL_<AGENT>` / `DEFAULT_MODEL`, `EVAL_JUDGE_MODEL`                     | `openai/gpt-4o-mini`                                                                       |
+| `embedder.ts`             | `EMBEDDING_CONFIG` (one JSON var) > `EMBEDDING_MODEL`                              | local fastembed E5 (key-free, 1024d); malformed JSON fails the boot                        |
 | `observability.ts`        | on by default; `OTEL_EXPORTER_OTLP_ENDPOINT` adds OTLP                             | storage-only exporters (byte-stable) + sensitive-data filter                               |
 | `pubsub.ts`               | `REDIS_URL` → Redis Streams                                                        | in-process bus; split workers unavailable                                                  |
 | `auth.ts`                 | `MASTRA_JWT_SECRET` (+ `MASTRA_WORKER_AUTH_TOKEN` bearer)                          | **dev: boots with ⚠️ warning · prod: refuses to boot** (`AUTH_DISABLED=true` escape hatch) |
@@ -192,7 +193,7 @@ Environment: development
 ✅ Storage          LibSQL local file:./mastra.db — feedback read-only (set DATABASE_URL for PostgreSQL)
 ✅ Vector store     LibSQLVector (file:./mastra.db — cosine)
 ✅ Semantic recall  on (fastembed/multilingual-e5-large · 1024d · scope:resource)
-✅ Knowledge RAG    workflow index-knowledge + tool search_knowledge
+✅ Knowledge RAG    tool search_knowledge registered (opt-in per agent: connectors.rag)
 ✅ Observability    traces stored in configured storage (set ENABLE_OBSERVABILITY=false to disable)
 ○ OTLP export      set OTEL_EXPORTER_OTLP_ENDPOINT to export
 ○ PubSub           in-process (EventEmitterPubSub) — split workers unavailable
@@ -216,7 +217,9 @@ Every variable in [`.env.example`](.env.example) is **optional** and documented 
 | Group           | Variables                                                                                                                                                                                           | Notes                                                                                                      |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | Providers       | `DEEPINFRA_API_KEY` `OPENAI_API_KEY` `ANTHROPIC_API_KEY` `GOOGLE_API_KEY`                                                                                                                           | set ≥1 to use agents; never required to boot                                                               |
-| Models          | `MODEL` · `MODEL_RESEARCH` `MODEL_TASKS` `MODEL_FILES` `MODEL_COMMS` · `DEFAULT_MODEL` · `OBSERVATIONAL_MEMORY_MODEL` · `EMBEDDING_MODEL` · `SCOPE_GUARD_MODEL` `SECURITY_MODEL` `EVAL_JUDGE_MODEL` | precedence `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL`; **no model string is ever hard-coded** (gotcha #5) |
+| Models          | `MODEL` · `MODEL_RESEARCH` `MODEL_TASKS` `MODEL_FILES` `MODEL_COMMS` · `DEFAULT_MODEL` · `OBSERVATIONAL_MEMORY_MODEL` · `SCOPE_GUARD_MODEL` `SECURITY_MODEL` `EVAL_JUDGE_MODEL`                    | precedence `MODEL_<AGENT>` > `MODEL` > `DEFAULT_MODEL`; **no model string is ever hard-coded** (gotcha #5) |
+| Embeddings      | `EMBEDDING_CONFIG` (one JSON var, third-party endpoints) · `EMBEDDING_MODEL` (legacy string) · `SEMANTIC_RECALL=off`                                                                                 | precedence + fail-fast in gotcha #24; local fastembed E5 when unset                                        |
+| Scope guard     | `SCOPE_GUARD=off` · `SCOPE_GUARD_MODE=redirect\|block` · `SCOPE_GUARD_TONE=warm\|formal\|neutral` · `SCOPE_GUARD_MODEL`                                                                            | per-domain voice in `scope.ts` (`refusal.tone`); gotcha #7                                                 |
 | Storage/vectors | `DATABASE_URL` · `LIBSQL_URL` · `SEMANTIC_RECALL=off`                                                                                                                                               | vector store follows storage; unset → local `file:./mastra.db`                                             |
 | Auth            | `MASTRA_JWT_SECRET` · `AUTH_DISABLED` · `MASTRA_WORKER_AUTH_TOKEN` · `AUTH_PROVIDER` (doc-extension)                                                                                                | production without auth **refuses to boot**                                                                |
 | HA/workers      | `REDIS_URL` · `MASTRA_WORKERS` · `MASTRA_STEP_EXECUTION_URL`                                                                                                                                        | split topology needs Redis; exactly ONE scheduler                                                          |
@@ -253,16 +256,27 @@ Defense in depth, ordered, and each layer optional-but-explicit:
 ## 🧠 Memory & RAG
 
 - **All four agents share `buildDomainMemory()`**: observational memory (compaction) + **semantic recall**.
-- **Key-free default**: local `@mastra/fastembed` multilingual E5 (1024d) — recall works with zero API keys;
-  `EMBEDDING_MODEL=openai/text-embedding-3-small` (etc.) upgrades to a hosted embedder.
+- **Key-free default**: local `@mastra/fastembed` multilingual E5 (1024d) — recall works with zero API keys.
+- **Declare the embedder in ONE variable**: `EMBEDDING_CONFIG` carries the whole model as JSON —
+  `{"providerId":"openai","modelId":"text-embedding-3-small","dimension":1536}`, or a third-party /
+  self-hosted OpenAI-compatible endpoint with `url` + `apiKey` + `headers` (no extra dependency):
+  ```bash
+  EMBEDDING_CONFIG='{"providerId":"openai","modelId":"my-embed-v1","dimension":1024,
+                     "url":"https://gateway.internal/v1","apiKey":"${ACME_EMBED_KEY}",
+                     "headers":{"X-Tenant":"acme"}}'
+  ```
+  Precedence: `SEMANTIC_RECALL=off` > `EMBEDDING_CONFIG` > `EMBEDDING_MODEL` (legacy string) > local fastembed.
+  Absent is always legal; **present-but-malformed fails the boot** (`[Embeddings] Invalid EMBEDDING_CONFIG …`).
 - **Degradation is latched, loud-once, and crash-proof**: embedder down ⇒ one canonical warn,
   `○ Semantic recall off (no embedder)`, plain history — `generate()` unaffected.
 - **Dimension stickiness** (gotcha #12): an index belongs to one dimension forever — the knowledge indexer
   fail-fasts (`VectorDimensionMismatchError`), Memory's derived index cold-resets. Treat embedder changes as
   re-index events.
-- **Chat-with-docs in one command**: run the `index-knowledge` workflow on a doc, then ask the research
-  agent — it answers via `search_knowledge` with chunk provenance. Fixture E2E in
-  `tests/integration/knowledge-rag.test.ts`.
+- **Chat-with-docs in one command**: run the `index-knowledge` workflow on a doc, then opt an agent into
+  the knowledge tool with `connectors: { rag: true }` in its `config.ts` — it answers via `search_knowledge`
+  with chunk provenance. Fixture E2E in `tests/integration/knowledge-rag.test.ts`.
+- **RAG is opt-in per agent** (gotcha #25): no agent ships with `search_knowledge`, even when the tool is
+  registered and the embedder resolved.
 
 ## 🔌 MCP
 

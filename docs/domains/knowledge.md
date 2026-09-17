@@ -49,13 +49,25 @@ curl -X POST http://localhost:4111/api/workflows/index-knowledge/run \
 - Re-indexing the same `docId` is idempotent (deterministic chunk ids).
 - Events: `knowledge.indexed` / `knowledge.index-failed` on the shared bus.
 
-## 3. Ask the research agent
+## 3. Opt in and ask an agent
 
-`search_knowledge` is auto-attached to the research agent **iff** the embedder
-resolved at boot (check the `Knowledge RAG` banner line). Ask e.g.
-*"What laptop budget do new hires get?"* — the agent queries the semantic index
-and cites the matching chunks (chunk text is in each result's
-`metadata.text`).
+`search_knowledge` is **opt-in per agent** (2026-09-17): the composition root
+registers it in the root `tools` registry **iff** the embedder resolved at boot
+(check the `Knowledge RAG` banner line), but no agent receives it unless it asks
+for it. To enable it in a domain, declare the connector in its `config.ts`:
+
+```ts
+export const researchSettings: DomainAgentSettings = {
+  modelKey: 'research',
+  maxSteps: 50,
+  connectors: { memory: 'observational', mcp: 'research', rag: true }, // ← rag: true
+};
+```
+
+Then ask e.g. *"What laptop budget do new hires get?"* — the agent queries the
+semantic index and cites the matching chunks (chunk text is in each result's
+`metadata.text`). Without `rag: true` the agent answers from memory/tools as usual
+and never sees the tool, even when the registry holds it.
 
 ## 4. Programmatic use
 
