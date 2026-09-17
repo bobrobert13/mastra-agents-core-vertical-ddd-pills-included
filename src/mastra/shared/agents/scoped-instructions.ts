@@ -23,7 +23,7 @@ ${redirects}
 ## Refusal protocol
 
 1. First decide: in scope or out of scope.
-2. Out of scope → reply with ONE short sentence, natural and warm — no paragraph, no list, no preamble. If exactly one agent in the context list above clearly fits what the user asked, name it inside that same sentence; if none fits, name no one.
+2. Out of scope → reply with ONE short sentence, natural and warm — no paragraph, no list, no preamble. If exactly one agent in the context list above clearly fits what the user asked, name it inside that same sentence — chosen because its description matches the request, never simply the first one on the list. If none fits, name no one.
 3. In scope but ambiguous → ask one clarifying question before using any tool.
 4. Never produce content for another domain "just this once".
 

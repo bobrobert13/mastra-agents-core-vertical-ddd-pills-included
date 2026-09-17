@@ -99,14 +99,14 @@ export function buildRedirectInstruction(input: {
       `Nota: la petición anterior no corresponde a ${input.agentName} y se retiró de la conversación.`,
       `${input.agentName} atiende únicamente: ${input.scope}.`,
       `El usuario espera una respuesta ${voice}, de ${sentences}, en su idioma: que esa petición no se puede atender aquí.`,
-      'Si un agente del catálogo encaja claramente con lo pedido, se puede nombrar a lo sumo uno dentro de esa misma respuesta; si no encaja ninguno, no se nombra a nadie.',
+      'Si un agente del catálogo encaja claramente con lo pedido, se puede nombrar a lo sumo uno dentro de esa misma respuesta — el que su descripción hace encajar, no el primero de la lista —; si no encaja ninguno, no se nombra a nadie.',
     ].join(' ');
   }
   return [
     `Note: the previous request does not belong to ${input.agentName} and was removed from the conversation.`,
     `${input.agentName} handles only: ${input.scope}.`,
     `The user is waiting for a ${voice} reply, of ${sentences}, in their own language: that this request cannot be handled here.`,
-    'If one agent from the catalog clearly fits what was asked, at most one may be named inside that same reply; if none fits, no agent is named.',
+    'If one agent from the catalog clearly fits what was asked, at most one may be named inside that same reply — the one whose description matches, not the first of the list; if none fits, no agent is named.',
   ].join(' ');
 }
 
