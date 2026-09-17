@@ -1,17 +1,22 @@
 import { WebFetchError, WebSearchError } from '../handlers/errors';
+import { researchFail, researchOk, type ResearchResult } from '../handlers/responses';
 import { extractHtmlTitle, htmlToText } from './web-parse';
 
 /** Fetch the DuckDuckGo Instant Answer JSON for `query` (raw payload). */
-export async function fetchDuckDuckGo(query: string): Promise<unknown> {
-  const response = await fetch(
-    `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
-  );
+export async function fetchDuckDuckGo(query: string): Promise<ResearchResult<unknown>> {
+  try {
+    const response = await fetch(
+      `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
+    );
 
-  if (!response.ok) {
-    throw new WebSearchError(`DuckDuckGo API error: ${response.status}`);
+    if (!response.ok) {
+      return researchFail(new WebSearchError(`DuckDuckGo API error: ${response.status}`));
+    }
+
+    return researchOk(await response.json());
+  } catch (error) {
+    return researchFail(new WebSearchError(`Failed to reach DuckDuckGo: ${error}`, { cause: error }));
   }
-
-  return response.json();
 }
 
 export interface FetchedPage {
@@ -26,12 +31,12 @@ export interface FetchedPage {
 export async function fetchAndExtract(
   url: string,
   extractMode: 'full' | 'summary'
-): Promise<FetchedPage> {
+): Promise<ResearchResult<FetchedPage>> {
   try {
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new WebFetchError(`HTTP error! status: ${response.status}`);
+      return researchFail(new WebFetchError(`HTTP error! status: ${response.status}`));
     }
 
     const html = await response.text();
@@ -40,14 +45,14 @@ export async function fetchAndExtract(
     // For summary mode, take first 1000 characters
     const content = extractMode === 'summary' ? text.substring(0, 1000) : text;
 
-    return {
+    return researchOk({
       content,
       title: extractHtmlTitle(html),
       wordCount: text.split(/\s+/).length,
       rawText: text,
-    };
+    });
   } catch (error) {
-    if (error instanceof WebFetchError) throw error;
-    throw new WebFetchError(`Failed to fetch URL: ${error}`, { cause: error });
+    if (error instanceof WebFetchError) return researchFail(error);
+    return researchFail(new WebFetchError(`Failed to fetch URL: ${error}`, { cause: error }));
   }
 }

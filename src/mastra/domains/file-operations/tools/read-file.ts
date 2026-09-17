@@ -1,8 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { readFile } from 'fs/promises';
-import { resolveWorkspacePath } from '../../../shared/tools/workspace-path';
-import { FileReadError, WorkspaceJailError } from '../handlers/errors';
+import { isFail } from '../../../shared/handlers';
+import { readWorkspaceFile } from '../functions';
 
 export const readFileTool = createTool({
   id: 'file-read',
@@ -20,22 +19,10 @@ export const readFileTool = createTool({
   // Read stays unapproved but jailed (spec 06 §3.5/§3.6): only MUTATING tools
   // carry requireApproval.
   execute: async ({ path, encoding = 'utf-8' }) => {
-    let target: string;
-    try {
-      target = resolveWorkspacePath(path); // jail BEFORE any fs call (§3.6)
-    } catch {
-      throw new WorkspaceJailError(path); // typed error created at the domain boundary
-    }
-
-    try {
-      const content = await readFile(target, encoding as BufferEncoding);
-      return {
-        content,
-        size: content.length,
-        path: target,
-      };
-    } catch (error) {
-      throw new FileReadError(`${error}`, error);
-    }
+    const result = await readWorkspaceFile(path, encoding as BufferEncoding);
+    // No `reason` field in this outputSchema: the typed failure crosses the
+    // boundary as the domain error the agent sees as a rejection.
+    if (isFail(result)) throw result.error;
+    return result.unwrap();
   },
 });

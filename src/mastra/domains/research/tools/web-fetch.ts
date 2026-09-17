@@ -3,6 +3,7 @@ import { TripWire } from '@mastra/core/agent';
 import { z } from 'zod';
 import { logger } from '../../../shared/logger';
 import { scanToolOutputForInjection } from '../../../shared/processors/security-stack';
+import { isFail } from '../../../shared/handlers';
 import { WebFetchError } from '../handlers/errors';
 import { fetchAndExtract } from '../functions/web-io';
 
@@ -24,7 +25,11 @@ export const webFetchTool = createTool({
   }),
   execute: async ({ url, extractMode = 'summary' }) => {
     try {
-      const page = await fetchAndExtract(url, extractMode);
+      const result = await fetchAndExtract(url, extractMode);
+      // This tool's outputSchema has no `reason` field, so the typed failure is
+      // re-thrown as the domain error rather than reshaped (hard rule).
+      if (isFail(result)) throw result.error;
+      const page = result.unwrap();
 
       // Spec 06 Q3 (DECIDED, option b): scanning boundary at the web-fetch
       // tool-output path — the injected-content gap Scenario 1 documents

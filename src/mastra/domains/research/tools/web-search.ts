@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { logger } from '../../../shared/logger';
+import { isFail } from '../../../shared/handlers';
 import { fetchDuckDuckGo } from '../functions/web-io';
 import { mapDuckDuckGoResults } from '../functions/web-parse';
 
@@ -22,8 +23,9 @@ export const webSearchTool = createTool({
   }),
   execute: async ({ query, maxResults = 5 }) => {
     try {
-      const data = await fetchDuckDuckGo(query);
-      return { results: mapDuckDuckGoResults(data, maxResults) };
+      const result = await fetchDuckDuckGo(query);
+      if (isFail(result)) throw result.error;
+      return { results: mapDuckDuckGoResults(result.unwrap(), maxResults) };
     } catch (error) {
       // Silent degradation (unchanged contract): a failed search is an empty
       // result set, never a thrown error.

@@ -6,14 +6,7 @@ export {
   VectorDimensionMismatchError,
   type IndexKnowledgeDeps,
 } from './workflows/index-knowledge';
-export {
-  KnowledgeError,
-  EmbedderUnavailableError,
-  EmbedFailureError,
-  VectorStoreUnavailableError,
-  KnowledgeSourceError,
-  toKnowledgeError,
-} from './handlers/errors';
+export * from './handlers';
 export {
   EMBED_BATCH,
   CHUNK_MAX_SIZE,

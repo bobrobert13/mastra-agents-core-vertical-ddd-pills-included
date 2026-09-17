@@ -1,6 +1,7 @@
 /**
- * File-operations domain error contracts. The typed errors are created at the
- * tool boundary (`tools/*.ts`) so the domain never leaks a bare `Error`.
+ * File-operations domain error contracts. The typed errors are created inside
+ * `functions/` and returned as a `FileOperationsResult`, so the domain never
+ * leaks a bare `Error` (the tool re-throws the typed failure).
  */
 import { AppError, toAppError } from '../../../shared/handlers';
 

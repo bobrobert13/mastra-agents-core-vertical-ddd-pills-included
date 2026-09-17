@@ -1,9 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { writeFile, mkdir } from 'fs/promises';
-import { dirname } from 'path';
-import { resolveWorkspacePath } from '../../../shared/tools/workspace-path';
-import { FileWriteError, WorkspaceJailError } from '../handlers/errors';
+import { isFail } from '../../../shared/handlers';
+import { writeWorkspaceFile } from '../functions';
 
 export const writeFileTool = createTool({
   id: 'file-write',
@@ -23,30 +21,8 @@ export const writeFileTool = createTool({
   // happens pre-execution, so a declined write provably makes no fs call.
   requireApproval: true,
   execute: async ({ path, content, createDirs = true }) => {
-    // Jail BEFORE any fs call (spec 06 §3.6); throws a tool-level error the
-    // agent sees as a rejection. The recursive mkdir below also lazily
-    // creates WORKSPACE_ROOT on first use.
-    let target: string;
-    try {
-      target = resolveWorkspacePath(path);
-    } catch {
-      throw new WorkspaceJailError(path); // typed error created at the domain boundary
-    }
-
-    try {
-      if (createDirs) {
-        await mkdir(dirname(target), { recursive: true });
-      }
-
-      await writeFile(target, content, 'utf-8');
-
-      return {
-        path: target,
-        size: content.length,
-        written: true,
-      };
-    } catch (error) {
-      throw new FileWriteError(`${error}`, error);
-    }
+    const result = await writeWorkspaceFile(path, content, createDirs);
+    if (isFail(result)) throw result.error;
+    return result.unwrap();
   },
 });

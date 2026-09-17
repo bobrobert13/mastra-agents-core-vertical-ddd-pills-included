@@ -16,9 +16,10 @@ LLM-exposed FS access done safely (spec 06, ADR-009).
 | `scope.ts` | `fileOperationsScope` (`DomainScope`): `agentName`/`scope`/`siblings` read from `shared/agents/domain-catalog.ts` (`DOMAIN_CATALOG['file-operations']` + `siblingsOf('file-operations')`); only `outOfScopeExamples` and `refusal: { tone: 'formal' }` are local (sober voice — it acts on the user's files) |
 | `config.ts` | `fileOperationsSettings` (`modelKey: 'files'`, `maxSteps: 20`, `connectors: { memory: 'basic' }`, `disableResponseCache: true` — spec 06 R2) |
 | `instructions.ts` | `fileOperationsInstructions` — capability body; `scopedInstructions()` prepends the scope/refusal block |
-| `tools/write-file.ts`, `tools/edit-file.ts` | `requireApproval: true` — a declined call provably performs NO fs write (jail check + approval happen before any fs touch) |
-| `tools/read-file.ts` | jailed, unapproved (reads are allowed but confined) |
-| `handlers/errors.ts` | Domain errors: `FileOperationsError` base + `WorkspaceJailError` (`WORKSPACE_JAIL_ESCAPE`) + `FileReadError`/`FileWriteError`/`FileEditError` + `UnexpectedFileOperationsError` + `toFileOperationsError`. The typed errors are created at the tool boundary (each tool wraps `resolveWorkspacePath` in try/catch → `WorkspaceJailError`, and its fs catch → the matching typed error with `cause`), so a bare `Error` never leaves the domain |
+| `tools/write-file.ts`, `tools/edit-file.ts` | Thin adapters (`requireApproval: true`) over `functions/`: a declined call provably performs NO fs write (jail check + approval happen before any fs touch) |
+| `tools/read-file.ts` | Thin adapter, jailed + unapproved (reads are allowed but confined) |
+| `functions/read-file.ts`, `write-file.ts`, `edit-file.ts` | The jailed fs logic, returning `FileOperationsResult`: each wraps `resolveWorkspacePath` in try/catch → `WorkspaceJailError`, and its fs catch → the matching typed error with `cause`; the tool re-throws the typed failure (`isFail`) so a bare `Error` never leaves the domain |
+| `handlers/errors.ts` | Domain errors: `FileOperationsError` base + `WorkspaceJailError` (`WORKSPACE_JAIL_ESCAPE`) + `FileReadError`/`FileWriteError`/`FileEditError` + `UnexpectedFileOperationsError` + `toFileOperationsError` |
 | `handlers/responses.ts` | `FileOperationsResult<T> = AppResult<T, FileOperationsError>` + `fileOperationsOk` / `fileOperationsFail` |
 | `index.ts` | Barrel export (agent, scope, guard, security stack, settings, instructions, tools, handlers) |
 
@@ -27,7 +28,8 @@ LLM-exposed FS access done safely (spec 06, ADR-009).
 | Directory | Purpose |
 |-----------|---------|
 | `handlers/` | `errors.ts` (domain error classes + `toFileOperationsError`) + `responses.ts` (`AppResult` alias) + the barrel |
-| `tools/` | `read-file.ts` / `write-file.ts` / `edit-file.ts` — the three jailed FS tools |
+| `functions/` | `read-file.ts` / `write-file.ts` / `edit-file.ts` — the jailed fs logic, each returning `FileOperationsResult<T>` |
+| `tools/` | `read-file.ts` / `write-file.ts` / `edit-file.ts` — thin adapters over `functions/` (schemas + `execute`) |
 
 ## For AI Agents
 
