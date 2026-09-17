@@ -8,6 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TripWire } from '@mastra/core/agent';
 import {
+  buildPiiDetectionInstructions,
   buildSecurityStack,
   registerSecurityStackStatus,
   scanToolOutputForInjection,
@@ -289,6 +290,25 @@ describe('TokenLimiter runtime semantics (Scenario 3)', () => {
         (list.messages.at(-1)!.content as { parts: unknown[] }).parts[0] as { text: string }
       ).text.endsWith('19')
     ).toBe(true);
+  });
+});
+
+describe('buildPiiDetectionInstructions (no-structured-outputs provider contract)', () => {
+  it('names the LITERAL schema keys the PIIDetector validates (DeepSeek used to drop redacted_content)', () => {
+    const text = buildPiiDetectionInstructions(['email', 'phone'], true);
+    expect(text).toContain('"categories"');
+    expect(text).toContain('"detections"');
+    expect(text).toContain('"redacted_content"');
+    expect(text).toContain('"redacted_value"');
+    expect(text).toContain('- email');
+    expect(text).toContain('- phone');
+  });
+
+  it('warn mode never promises the redacted fields (the schema does not carry them)', () => {
+    const text = buildPiiDetectionInstructions(['email'], false);
+    expect(text).toContain('"detections"');
+    expect(text).not.toContain('redacted_content');
+    expect(text).not.toContain('redacted_value');
   });
 });
 

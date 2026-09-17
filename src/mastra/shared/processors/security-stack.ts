@@ -58,6 +58,61 @@ export const DEFAULT_TOKEN_LIMIT = 8000;
 export const DEFAULT_PI_THRESHOLD = 0.8;
 export const DEFAULT_RESPONSE_CACHE_TTL = 300;
 
+/**
+ * Tipos de detección del PII de salida: sólo los que tienen patrón regex local
+ * (los LLM-only `name`/`address`/`date-of-birth` quedan fuera a propósito, ver
+ * el comentario del output slot en `buildSecurityStack`).
+ */
+export const PII_DETECTION_TYPES = ['email', 'phone', 'credit-card', 'ssn', 'ip-address'] as const;
+
+/**
+ * Instrucciones del PII detector, por la MISMA razón que las del detector de
+ * inyección (ver `createInjectionDetector`): con un proveedor que no anuncia
+ * `supportsStructuredOutputs` —DeepInfra incluido— el esquema zod no viaja al
+ * proveedor y el modelo sólo ve las instrucciones. Las de fábrica nombran las
+ * categorías pero NUNCA el contrato de salida, así que DeepSeek devolvía un
+ * objeto sin `redacted_content`, la validación lanzaba y el detector quedaba
+ * inerte: se pagaban ~1.7 s por turno y no detectaba nada
+ * (`[PIIDetector] Detection agent failed, allowing content`).
+ *
+ * El texto reproduce las instrucciones de fábrica y les añade el contrato con
+ * las claves literales del esquema (`categories`, `detections`, y en modo
+ * `redact` `redacted_value` / `redacted_content`). `start`/`end` describen el
+ * índice por carácter; `redacted_content` puede ser null y el procesador lo
+ * reconstruye con `applyRedactionMethod` cuando hay detecciones.
+ */
+export function buildPiiDetectionInstructions(
+  types: readonly string[] = PII_DETECTION_TYPES,
+  redact = true
+): string {
+  const detectionShape = [
+    '{ "type": <one of the types above>, "value": <the exact substring found>,',
+    '"confidence": <number 0..1>, "start": <index of the first character>,',
+    '"end": <index after the last character>',
+    redact ? ', "redacted_value": <the value masked>' : '',
+    ' }',
+  ].join(' ');
+
+  return [
+    'You are a PII (Personally Identifiable Information) detection specialist. Your job is to identify and locate sensitive personal information in text content for privacy compliance.',
+    '',
+    'Detect and analyze the following PII types:',
+    ...types.map(type => `- ${type}`),
+    '',
+    'IMPORTANT: Only include PII types that are actually detected. If no PII is found, return empty arrays for categories and detections.',
+    '',
+    'Respond with a single JSON object with EXACTLY these keys:',
+    '"categories": an array of { "type": <one of the types above>, "score": <number 0..1> }, or null when nothing is detected.',
+    `"detections": an array of ${detectionShape}, or null when nothing is detected.`,
+    ...(redact
+      ? [
+          '"redacted_content": the full content with every detection replaced by its masked form, or null when there are no detections.',
+        ]
+      : []),
+    'Do not add any other key.',
+  ].join('\n');
+}
+
 function envNum(name: string, fallback: number): number {
   const raw = process.env[name];
   if (!raw) return fallback;
@@ -207,14 +262,16 @@ export function buildSecurityStack(input: SecurityStackInput): SecurityStack {
   // two-mode behavior in PIIDetector).
   const outputProcessors: OutputProcessor[] = [];
   if (detectorsActive) {
+    const redacts = mode !== 'log';
     outputProcessors.push(
       new PIIDetector({
         model: securityModel(),
         threshold: 0.6,
-        strategy: mode === 'log' ? 'warn' : 'redact',
+        strategy: redacts ? 'redact' : 'warn',
         redactionMethod: 'mask',
-        detectionTypes: ['email', 'phone', 'credit-card', 'ssn', 'ip-address'],
+        detectionTypes: [...PII_DETECTION_TYPES],
         includeDetections: true,
+        instructions: buildPiiDetectionInstructions(PII_DETECTION_TYPES, redacts),
       })
     );
   }
