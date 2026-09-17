@@ -148,16 +148,17 @@ timeout 15 npm run dev   # verify boot + banner + /api/workflows, then kill
 ## Development Workflow
 
 ### Adding a New Domain
-1. Create `src/mastra/domains/<domain-name>/` with the four one-responsibility files (`scope.ts` / `config.ts` / `instructions.ts` / `agent.ts` — see [Creating an Agent](#creating-an-agent)), plus `tools/`, optional `workflows/` (steps in `workflows/steps/`, shared shapes in `workflows/schemas.ts`), `scorers/`, `entities/`, `events.ts` and `index.ts` (barrel: the agent, `*Scope`, `*ScopeGuard`, `*SecurityStack` — the only import surface).
+1. Create `src/mastra/domains/<domain-name>/` with the four one-responsibility files (`scope.ts` / `config.ts` / `instructions.ts` / `agent.ts` — see [Creating an Agent](#creating-an-agent)), plus `handlers/` (the domain error/result contract — see [Domain Handlers & Tool Functions](#domain-handlers--tool-functions)), `tools/` + `functions/` (thin tool adapters over the extracted logic), optional `workflows/` (steps in `workflows/steps/`, shared shapes in `workflows/schemas.ts`), `scorers/`, `entities/`, `events.ts` and `index.ts` (barrel: the agent, `*Scope`, `*ScopeGuard`, `*SecurityStack` — the only import surface).
 2. Add its entry to `shared/agents/domain-catalog.ts` (`agentName` / `scope` / short `description`): that ONE table feeds the siblings of every domain, so no domain copies it.
 3. Register the agent (and any workflow) in the `agents`/`workflows` maps of `src/mastra/index.ts`.
 4. Add `tests/unit/domains/<domain>/`, `tests/evals/<domain>.eval.test.ts`; keep every file ≤150 LOC (`tests/unit/structure/file-size.test.ts` enforces it).
 5. Document in `docs/domains/<domain>.md` and add an `AGENTS.md` for the domain folder.
 
 ### Adding a New Tool
-1. `src/mastra/domains/<domain>/tools/<tool-name>.ts` with `createTool()` + Zod schemas.
-2. Use `logger` from `src/mastra/shared/logger.ts` — never raw `console.*` (no-console lint rule).
-3. Export from domain `index.ts`; add unit test.
+1. `src/mastra/domains/<domain>/tools/<tool-name>.ts` with `createTool()` + Zod schemas: a tool is a THIN adapter — schemas + `execute`, nothing else.
+2. If `execute` carries real logic (algorithm, multi-step orchestration, I/O), move it to `src/mastra/domains/<domain>/functions/<name>.ts` and have it return the domain's `Result` (see [Domain Handlers & Tool Functions](#domain-handlers--tool-functions)); the tool maps that result onto its `outputSchema`.
+3. Use `logger` from `src/mastra/shared/logger.ts` — never raw `console.*` (no-console lint rule).
+4. Export from domain `index.ts`; add unit tests for the pure function AND keep the tool's schema contract covered.
 
 ### Running Tests
 ```bash
@@ -271,6 +272,57 @@ export const myAgent = buildDomainAgent({
 - `disableResponseCache` — **REQUIRED** for mutating agents (file writes, task creation, etc.)
 - `tools` — static map or async function `({ mastra }) => ({...})`
 - `overrides` — any additional `AgentConfig` fields
+
+### Domain Handlers & Tool Functions
+
+Every domain owns its failure contract in `handlers/` and its heavy logic in `functions/`, both extending the two general bases in `shared/handlers/`:
+
+```
+domains/<domain>/
+├── handlers/
+│   ├── errors.ts      # <Domain>Error (abstract, extends AppError) + one class per real cause
+│   ├── responses.ts   # <Domain>Result<T> = AppResult<T, <Domain>Error> + ok/fail builders
+│   └── index.ts       # barrel — re-exported from the domain index.ts
+└── functions/         # the heavy logic behind tools/, one responsibility per module
+```
+
+```typescript
+// handlers/errors.ts
+import { AppError } from '../../../shared/handlers';
+
+export abstract class MyDomainError extends AppError {
+  readonly domain = 'my-domain' as const;
+}
+
+export class MyNotFoundError extends MyDomainError {
+  readonly code = 'MY_NOT_FOUND' as const;
+  constructor(message: string) {
+    super(message, { kind: 'not_found' });
+  }
+}
+
+// handlers/responses.ts
+export type MyDomainResult<T> = AppResult<T, MyDomainError>;
+export const myOk = <T>(value: T): MyDomainResult<T> => AppResult.ok<T, MyDomainError>(value);
+export const myFail = <T>(error: MyDomainError): MyDomainResult<T> =>
+  AppResult.fail<T, MyDomainError>(error);
+
+// functions/do-thing.ts — the logic, typed, not thrown
+export async function doThing(input: MyInput): Promise<MyDomainResult<MyOutput>> { ... }
+
+// tools/do-thing.ts — thin adapter: the outputSchema does NOT change
+execute: async (input, context) => {
+  const result = await doThing(input);
+  if (isFail(result)) return { ...failureFields, message: result.error.message };
+  return { ...successFields };
+},
+```
+
+**Hard rules:**
+- `AppError` / `AppResult` in `shared/handlers/` are the ONLY shared part — the concrete errors belong to their domain (`shared/` never imports `domains/`), and `code`/`domain`/`kind` are what a caller adapts on instead of matching message strings.
+- The `Result` instance **never crosses the tool boundary**: `execute` returns a plain object matching `outputSchema` (Mastra/Zod validate it, and `runTool` treats a lone `{ error }` key as a validation failure). Adapters map the typed failure onto the tool's existing `reason`/`message` fields — never reshape an `outputSchema` just to carry the `Result`.
+- Business outcomes and infrastructure failures stay distinguishable: map the known errors onto the tool's `reason` enum and **re-throw** the rest, so a downed DB is never disguised as `NOT_FOUND`.
+- `functions/` is for real logic, not for one-liners: a tool whose `execute` is already a thin orchestrator stays as it is.
 
 ### Domain Events
 

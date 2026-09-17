@@ -15,6 +15,7 @@ All application source. A single Mastra instance (`index.ts`) composes four vert
 | `shared/config/embedding-parse.ts` | Pure `EMBEDDING_CONFIG` parser (one JSON var = the whole embedder declaration, `${VAR}` interpolation); malformed ⇒ boot error, absent ⇒ fall through |
 | `shared/config/embedder.ts` | `resolveEmbedder()`: `SEMANTIC_RECALL=off` > `EMBEDDING_CONFIG` > `EMBEDDING_MODEL` > local fastembed |
 | `shared/agents/` | `buildDomainAgent()` + the declarative `connectors` (`rag`/`memory`/`mcp`), `domain-catalog.ts` (the single domain table + `siblingsOf()`), `scoped-instructions.ts` |
+| `shared/handlers/` | The two general bases every domain extends: `app-error.ts` (`AppError` — abstract `code`/`domain`, semantic `kind`, `toJSON()`, `toAppError`/`isPersistenceUnavailable`) and `app-result.ts` (`AppResult` — `ok`/`fail` + `unwrap`/`unwrapOr`/`map`/`match`). Concrete domain errors live in each `domains/<d>/handlers/errors.ts`; `shared/` never imports `domains/` |
 
 ## Subdirectories
 
@@ -23,7 +24,7 @@ All application source. A single Mastra instance (`index.ts`) composes four vert
 | `domains/` | The vertical slices (see `domains/AGENTS.md`) |
 | `routes/` | Custom HTTP surface (spec 08): `buildServerSurface` + webhook/health/chat routes + route middleware — see `routes/AGENTS.md` |
 | `mcp/` | **Composition-layer exception (ADR-007):** the project's own read-only `MCPServer` assembly (`server.ts`, gated on `ENABLE_MCP_SERVER=true`) + stdio bundle entry (`stdio.ts`). Imports domain barrels — legal here, forbidden in `shared/`. `index.ts` gains exactly one awaited `buildMcpServer(services)` call (see `mcp/AGENTS.md`) |
-| `shared/` | Cross-domain utilities: logger, event bus, config builders (storage/vectors/observability/pubsub/auth/mcp/providers/service-status/model/embedder/embedding-parse/schedules), run-tool, workspace jail, `buildDomainAgent()` + `connectors`, `domain-catalog.ts`, `scope-messaging.ts` (see `shared/AGENTS.md`) |
+| `shared/` | Cross-domain utilities: logger, event bus, config builders (storage/vectors/observability/pubsub/auth/mcp/providers/service-status/model/embedder/embedding-parse/schedules), run-tool, workspace jail, `buildDomainAgent()` + `connectors`, `domain-catalog.ts`, `scope-messaging.ts`, `handlers/` (`AppError` + `AppResult` — the general bases every domain extends; see `shared/AGENTS.md`) |
 | `public/` | Runtime data dir; contains generated `mastra.db*` (LibSQL) — gitignored, never edit |
 
 ## For AI Agents
