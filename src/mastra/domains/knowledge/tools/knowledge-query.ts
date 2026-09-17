@@ -7,7 +7,7 @@ import {
   semanticRecallAvailable,
   type Vector,
 } from '../../../shared/config/vectors';
-import { KNOWLEDGE_INDEX_NAME } from '../workflows/index-knowledge';
+import { KNOWLEDGE_INDEX_NAME } from '../config';
 
 /**
  * Wrapper around `createVectorQueryTool` (spec 03 §3.6). Registered on the

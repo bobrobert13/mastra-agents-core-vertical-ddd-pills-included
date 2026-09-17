@@ -1,99 +1,16 @@
 import { randomUUID } from 'node:crypto';
-import { logger } from '../../shared/logger';
-import type { AppDatabase } from '../../shared/config/db';
-import type { Task, TaskStatus, TaskPriority } from './entities/task';
+import type { AppDatabase } from '../../../shared/config/db';
+import type { Task } from '../entities/task';
+import { SELECT_COLUMNS, createEnsureSchema } from './schema';
+import type {
+  CreateTaskInput,
+  ListTasksFilter,
+  TaskRepository,
+  TaskRow,
+  UpdateTaskPatch,
+} from './types';
 
-/**
- * Task repository — owns the `app_tasks` custom table (ADR-008, spec 05 §3.2).
- * The table lives inside the same database file/URL as Mastra storage but is
- * OUTSIDE Mastra's migration system: `ensureSchema()` is additive and
- * idempotent, and Mastra's prune/retention never touches it.
- *
- * Dialect-portability: identical DDL for LibSQL and Postgres (ISO-8601 TEXT
- * timestamps by design); the only per-dialect code is placeholder syntax and
- * column introspection.
- */
-
-export interface CreateTaskInput {
-  title: string;
-  description?: string;
-  priority?: TaskPriority;
-  dueDate?: string;
-  resourceId?: string;
-}
-
-export interface UpdateTaskPatch {
-  title?: string;
-  description?: string;
-  status?: TaskStatus;
-  priority?: TaskPriority;
-  dueDate?: string;
-  scheduleId?: string;
-  /** Optimistic lock (Scenario 5): the UPDATE only lands while the row is still at this version. */
-  expectVersion?: number;
-}
-
-export interface ListTasksFilter {
-  resourceId?: string;
-  /** exact-match filter */
-  status?: TaskStatus;
-  /** set-based filter (the digest needs status ≠ completed) */
-  excludeStatus?: TaskStatus;
-  /** default 20, max 100 */
-  limit?: number;
-}
-
-export interface TaskRepository {
-  ensureSchema(): Promise<void>;
-  createTask(input: CreateTaskInput): Promise<Task>;
-  getTask(id: string): Promise<Task | null>;
-  listTasks(filter?: ListTasksFilter): Promise<Task[]>;
-  /** null = row missing OR expectVersion mismatch (caller distinguishes via a follow-up getTask). */
-  updateTask(id: string, patch: UpdateTaskPatch): Promise<Task | null>;
-  attachSchedule(id: string, scheduleId: string): Promise<Task | null>;
-}
-
-const CREATE_TABLE_SQL = `CREATE TABLE IF NOT EXISTS app_tasks (
-  id           TEXT PRIMARY KEY,
-  resource_id  TEXT NOT NULL DEFAULT 'default',
-  title        TEXT NOT NULL,
-  description  TEXT,
-  status       TEXT NOT NULL CHECK (status    IN ('pending','in-progress','completed')),
-  priority     TEXT NOT NULL CHECK (priority  IN ('low','medium','high')),
-  due_date     TEXT,
-  schedule_id  TEXT,
-  created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL,
-  version      INTEGER NOT NULL DEFAULT 1
-)`;
-
-const CREATE_INDEX_SQL =
-  'CREATE INDEX IF NOT EXISTS idx_app_tasks_resource_status ON app_tasks (resource_id, status)';
-
-/**
- * Additive column migrations (spec 05 §3.7): future column additions append
- * entries here; each runs only when the column is missing. NEVER destructive
- * — Mastra's init/prune do not know about app tables.
- */
-const ADDITIVE_COLUMN_MIGRATIONS: ReadonlyArray<{ column: string; ddl: string }> = [];
-
-interface TaskRow {
-  id: string;
-  resource_id: string;
-  title: string;
-  description: string | null;
-  status: TaskStatus;
-  priority: TaskPriority;
-  due_date: string | null;
-  schedule_id: string | null;
-  created_at: string;
-  updated_at: string;
-  version: number;
-}
-
-const SELECT_COLUMNS =
-  'id, resource_id, title, description, status, priority, due_date, schedule_id, created_at, updated_at, version';
-
+/** Map a raw driver row onto the `Task` entity (optional fields collapse to `undefined`). */
 function toTask(row: TaskRow): Task {
   return {
     id: row.id,
@@ -110,42 +27,16 @@ function toTask(row: TaskRow): Task {
   };
 }
 
+/**
+ * `createTaskRepository(db)` — the full CRUD over `app_tasks`, dialect-portable
+ * through `db` (`$n` placeholders for pg, `?` for libsql). Schema bootstrap
+ * lives in `schema.ts`; the type contracts live in `types.ts`.
+ */
 export function createTaskRepository(db: AppDatabase): TaskRepository {
   /** `$n` for pg, `?` for libsql; called in param-append order. */
   const ph = db.dialect === 'pg' ? (i: number): string => `$${i + 1}` : (_i: number): string => '?';
 
-  let ensured: Promise<void> | undefined;
-
-  async function ensureSchema(): Promise<void> {
-    if (!ensured) {
-      ensured = (async () => {
-        await db.execute(CREATE_TABLE_SQL);
-        await db.execute(CREATE_INDEX_SQL);
-        if (ADDITIVE_COLUMN_MIGRATIONS.length > 0) {
-          const existing = await existingColumns();
-          for (const migration of ADDITIVE_COLUMN_MIGRATIONS) {
-            if (!existing.has(migration.column)) {
-              await db.execute(migration.ddl);
-              logger.info(`[task-repo] additive migration applied: app_tasks.${migration.column}`);
-            }
-          }
-        }
-      })();
-    }
-    await ensured;
-  }
-
-  async function existingColumns(): Promise<Set<string>> {
-    if (db.dialect === 'pg') {
-      const { rows } = await db.query<{ column_name: string }>(
-        'SELECT column_name FROM information_schema.columns WHERE table_name = $1',
-        ['app_tasks']
-      );
-      return new Set(rows.map(r => r.column_name));
-    }
-    const { rows } = await db.query<{ name: string }>('PRAGMA table_info(app_tasks)');
-    return new Set(rows.map(r => r.name));
-  }
+  const ensureSchema = createEnsureSchema(db);
 
   async function selectOne(where: string[], params: unknown[], limit?: number): Promise<Task[]> {
     const sql = `SELECT ${SELECT_COLUMNS} FROM app_tasks${

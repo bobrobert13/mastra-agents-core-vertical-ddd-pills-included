@@ -1,5 +1,5 @@
 export { researchScope } from './scope';
-export { researchSettings } from './config';
+export { researchSettings, deepResearchSettings } from './config';
 export { researchInstructions } from './instructions';
 export { researchAgent, researchScopeGuard } from './agent';
 export { researchSecurityStack } from './agent';

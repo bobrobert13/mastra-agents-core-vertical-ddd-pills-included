@@ -6,6 +6,12 @@ export {
   VectorDimensionMismatchError,
   type IndexKnowledgeDeps,
 } from './workflows/index-knowledge';
+export {
+  EMBED_BATCH,
+  CHUNK_MAX_SIZE,
+  CHUNK_OVERLAP,
+  KNOWLEDGE_HNSW_INDEX_CONFIG,
+} from './config';
 export { knowledgeQueryTool, createKnowledgeQueryTool } from './tools/knowledge-query';
 export {
   knowledgeDocSchema,

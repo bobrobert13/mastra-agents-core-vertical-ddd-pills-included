@@ -6,3 +6,9 @@ export const researchSettings: DomainAgentSettings = {
   maxSteps: 50,
   connectors: { memory: 'observational', mcp: 'research' },
 };
+
+/** Knobs del workflow `deep-research` (sin literales sueltos dentro de los steps). */
+export const deepResearchSettings = {
+  /** Tope de caracteres por resumen entregado a `summarize`. */
+  summaryMaxLength: 300,
+} as const;
