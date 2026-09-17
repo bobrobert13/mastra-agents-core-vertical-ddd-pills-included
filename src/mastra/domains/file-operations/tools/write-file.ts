@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import { resolveWorkspacePath } from '../../../shared/tools/workspace-path';
+import { FileWriteError, WorkspaceJailError } from '../handlers/errors';
 
 export const writeFileTool = createTool({
   id: 'file-write',
@@ -25,7 +26,12 @@ export const writeFileTool = createTool({
     // Jail BEFORE any fs call (spec 06 §3.6); throws a tool-level error the
     // agent sees as a rejection. The recursive mkdir below also lazily
     // creates WORKSPACE_ROOT on first use.
-    const target = resolveWorkspacePath(path);
+    let target: string;
+    try {
+      target = resolveWorkspacePath(path);
+    } catch {
+      throw new WorkspaceJailError(path); // typed error created at the domain boundary
+    }
 
     try {
       if (createDirs) {
@@ -40,7 +46,7 @@ export const writeFileTool = createTool({
         written: true,
       };
     } catch (error) {
-      throw new Error(`Failed to write file: ${error}`, { cause: error });
+      throw new FileWriteError(`${error}`, error);
     }
   },
 });

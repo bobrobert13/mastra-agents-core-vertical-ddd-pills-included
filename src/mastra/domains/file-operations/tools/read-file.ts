@@ -2,6 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { readFile } from 'fs/promises';
 import { resolveWorkspacePath } from '../../../shared/tools/workspace-path';
+import { FileReadError, WorkspaceJailError } from '../handlers/errors';
 
 export const readFileTool = createTool({
   id: 'file-read',
@@ -19,7 +20,12 @@ export const readFileTool = createTool({
   // Read stays unapproved but jailed (spec 06 §3.5/§3.6): only MUTATING tools
   // carry requireApproval.
   execute: async ({ path, encoding = 'utf-8' }) => {
-    const target = resolveWorkspacePath(path); // jail BEFORE any fs call (§3.6)
+    let target: string;
+    try {
+      target = resolveWorkspacePath(path); // jail BEFORE any fs call (§3.6)
+    } catch {
+      throw new WorkspaceJailError(path); // typed error created at the domain boundary
+    }
 
     try {
       const content = await readFile(target, encoding as BufferEncoding);
@@ -29,7 +35,7 @@ export const readFileTool = createTool({
         path: target,
       };
     } catch (error) {
-      throw new Error(`Failed to read file: ${error}`, { cause: error });
+      throw new FileReadError(`${error}`, error);
     }
   },
 });

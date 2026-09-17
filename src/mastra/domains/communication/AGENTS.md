@@ -14,12 +14,15 @@ Smallest vertical slice: agent + one structured-interaction tool. Reference impl
 | `scope.ts` | `communicationScope` (`DomainScope`): `agentName`/`scope`/`siblings` read from `shared/agents/domain-catalog.ts` (`DOMAIN_CATALOG.communication` + `siblingsOf('communication')`); only `outOfScopeExamples` and `refusal: { tone: 'warm' }` are local |
 | `config.ts` | `communicationSettings` (`modelKey: 'comms'`, `maxSteps: 10`, `connectors: { memory: 'basic' }`) |
 | `instructions.ts` | `communicationInstructions` — capability body; `scopedInstructions()` prepends the scope/refusal block |
-| `index.ts` | Barrel export (agent, scope, guard, security stack, settings, instructions, tool) |
+| `handlers/errors.ts` | Error base ONLY: `CommunicationError` (`domain = 'communication'`) + `CommunicationToolError` (`COMMUNICATION_TOOL_ERROR`, the generic tool-boundary alias) + `toCommunicationError`. This floor-template slice has **no real failure path** — `ask_user` always returns a placeholder — so no scenario-specific errors are invented; the base + alias exist for a future throw and to match the cross-domain pattern |
+| `handlers/responses.ts` | `CommunicationResult<T> = AppResult<T, CommunicationError>` + `communicationOk` / `communicationFail` (the Result alias) |
+| `index.ts` | Barrel export (agent, scope, guard, security stack, settings, instructions, tool, handlers) |
 
 ## Subdirectories
 
 | Directory | Purpose |
 |-----------|---------|
+| `handlers/` | `errors.ts` (the error base + tool-boundary alias) + `responses.ts` (the `AppResult` alias) + the barrel |
 | `tools/` | `ask-user.ts` — presents structured questions/options to the user + barrel |
 
 ## For AI Agents

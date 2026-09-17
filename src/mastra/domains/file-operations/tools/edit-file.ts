@@ -2,6 +2,7 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { readFile, writeFile } from 'fs/promises';
 import { resolveWorkspacePath } from '../../../shared/tools/workspace-path';
+import { FileEditError, WorkspaceJailError } from '../handlers/errors';
 
 export const editFileTool = createTool({
   id: 'file-edit',
@@ -20,7 +21,12 @@ export const editFileTool = createTool({
   // Spec 06 §3.5: approval gate is pre-execution — decline never reads or writes.
   requireApproval: true,
   execute: async ({ path, searchText, replaceText }) => {
-    const target = resolveWorkspacePath(path); // jail BEFORE any fs call (§3.6)
+    let target: string;
+    try {
+      target = resolveWorkspacePath(path); // jail BEFORE any fs call (§3.6)
+    } catch {
+      throw new WorkspaceJailError(path); // typed error created at the domain boundary
+    }
 
     try {
       const content = await readFile(target, 'utf-8');
@@ -37,7 +43,7 @@ export const editFileTool = createTool({
         edited: replacements > 0,
       };
     } catch (error) {
-      throw new Error(`Failed to edit file: ${error}`, { cause: error });
+      throw new FileEditError(`${error}`, error);
     }
   },
 });

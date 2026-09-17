@@ -17,7 +17,8 @@ Chat-with-docs vertical slice (spec 03): a deterministic ETL `index-knowledge` w
 | `workflows/steps/embed-chunks.ts` | `embed-chunks`: batched `doEmbed` (≤`EMBED_BATCH`); on failure latches the health flag + publishes `knowledge.index-failed`, then rethrows |
 | `workflows/steps/store-chunks.ts` | `store-chunks`: ensure index or **fail-fast `VectorDimensionMismatchError`** (check precedes any upsert), then idempotent upsert; publishes `knowledge.indexed` |
 | `config.ts` | Domain constants: `KNOWLEDGE_INDEX_NAME`, `EMBED_BATCH` (256), `CHUNK_MAX_SIZE` (512), `CHUNK_OVERLAP` (50), `KNOWLEDGE_HNSW_INDEX_CONFIG` |
-| `errors.ts` | `VectorDimensionMismatchError` — public contract (re-exported by the workflow module and the barrel) |
+| `handlers/errors.ts` | Domain errors (moved here from `errors.ts`): `KnowledgeError` base + `VectorDimensionMismatchError` (public contract, re-exported by the workflow module and the barrel) + `EmbedderUnavailableError` / `EmbedFailureError` / `VectorStoreUnavailableError` / `KnowledgeSourceError` / `UnexpectedKnowledgeError` + `toKnowledgeError` |
+| `handlers/responses.ts` | `KnowledgeResult<T> = AppResult<T, KnowledgeError>` + `knowledgeOk` / `knowledgeFail` |
 | `tools/knowledge-query.ts` | `createKnowledgeQueryTool()` wrapper over `createVectorQueryTool` (`vectorStoreName: 'mastra-vectors'`, `indexName: 'knowledge_docs'`); **null when no embedder resolves** — never throws; rerank OFF by default (zero-key promise) |
 | `entities/document.ts` | `KnowledgeDoc` / `KnowledgeChunk` zod entities + `knowledgeContentTypeSchema` |
 | `events.ts` | `knowledge.indexed` / `knowledge.index-failed` contracts (typed bus) |
@@ -28,6 +29,7 @@ Chat-with-docs vertical slice (spec 03): a deterministic ETL `index-knowledge` w
 | Directory | Purpose |
 |-----------|---------|
 | `workflows/` | `index-knowledge.ts` composition, `schemas.ts` (shared shapes), `steps/{read-document,chunk-document,embed-chunks,store-chunks}.ts` (one ETL step per module) |
+| `handlers/` | `errors.ts` (the domain error classes, formerly `errors.ts` at the domain root) + `responses.ts` (the `AppResult` alias) + the barrel |
 | `tools/` | `knowledge-query.ts` — the `search_knowledge` vector-query wrapper |
 | `entities/` | `document.ts` — the `KnowledgeDoc`/`KnowledgeChunk` entities |
 

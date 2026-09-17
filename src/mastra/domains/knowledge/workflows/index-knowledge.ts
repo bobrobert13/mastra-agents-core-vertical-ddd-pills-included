@@ -15,7 +15,7 @@ import { createStoreChunksStep } from './steps/store-chunks';
  * query tool import the constant/error/type from this exact module path.
  */
 export { KNOWLEDGE_INDEX_NAME } from '../config';
-export { VectorDimensionMismatchError } from '../errors';
+export { VectorDimensionMismatchError } from '../handlers/errors';
 export type { IndexKnowledgeDeps } from './schemas';
 
 /**

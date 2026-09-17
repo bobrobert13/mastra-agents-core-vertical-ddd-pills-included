@@ -6,7 +6,7 @@ import { VECTOR_STORE_NAME, type Vector } from '../../../../shared/config/vector
 import { eventBus, makeEvent } from '../../../../shared/events';
 import { logger } from '../../../../shared/logger';
 import { KNOWLEDGE_HNSW_INDEX_CONFIG, KNOWLEDGE_INDEX_NAME } from '../../config';
-import { VectorDimensionMismatchError } from '../../errors';
+import { VectorDimensionMismatchError, VectorStoreUnavailableError } from '../../handlers/errors';
 import { knowledgeIndexedEvent } from '../../events';
 import { embeddedDocSchema, workflowOutputSchema, type IndexKnowledgeDeps } from '../schemas';
 
@@ -24,7 +24,7 @@ function resolveVectorStore(
     deps.vector ??
     (mastra?.listVectors?.() as Record<string, Vector> | undefined)?.[VECTOR_STORE_NAME];
   if (!store) {
-    throw new Error(
+    throw new VectorStoreUnavailableError(
       `index-knowledge: no vector store — pass deps.vector or register "${VECTOR_STORE_NAME}" on the Mastra instance`
     );
   }

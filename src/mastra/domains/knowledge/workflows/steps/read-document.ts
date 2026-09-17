@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createStep } from '@mastra/core/workflows';
 
 import type { KnowledgeContentType } from '../../entities/document';
+import { KnowledgeSourceError } from '../../handlers/errors';
 import { readDocSchema, workflowInputSchema } from '../schemas';
 
 /**
@@ -17,7 +18,7 @@ function assertInsideWorkspace(resolved: string): void {
   const roots = [process.cwd(), path.join(process.cwd(), 'workspace')];
   const inside = roots.some(root => resolved === root || resolved.startsWith(root + path.sep));
   if (!inside) {
-    throw new Error(
+    throw new KnowledgeSourceError(
       `index-knowledge: path "${resolved}" escapes the workspace root (path containment)`
     );
   }

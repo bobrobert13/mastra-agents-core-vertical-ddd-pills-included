@@ -4,6 +4,7 @@ import { resolveEmbedder } from '../../../../shared/config/model';
 import { markEmbedderUnavailable } from '../../../../shared/config/vectors';
 import { eventBus, makeEvent } from '../../../../shared/events';
 import { EMBED_BATCH } from '../../config';
+import { EmbedderUnavailableError, EmbedFailureError } from '../../handlers/errors';
 import { knowledgeIndexFailedEvent } from '../../events';
 import { chunkedDocSchema, embeddedDocSchema, type IndexKnowledgeDeps } from '../schemas';
 
@@ -20,7 +21,7 @@ export function createEmbedChunksStep(deps: IndexKnowledgeDeps) {
     execute: async ({ inputData }) => {
       const embedder = deps.embedder ?? resolveEmbedder().passage;
       if (!embedder) {
-        throw new Error(
+        throw new EmbedderUnavailableError(
           'index-knowledge: embed-chunks — no embedder resolved (see banner, "Semantic recall: off (no embedder)")'
         );
       }
@@ -45,11 +46,13 @@ export function createEmbedChunksStep(deps: IndexKnowledgeDeps) {
             timestamp: new Date(),
           })
         );
-        throw error;
+        throw new EmbedFailureError(reason, error);
       }
 
       const dimension = vectors[0]?.length ?? 0;
-      if (!dimension) throw new Error('index-knowledge: embed-chunks produced no vectors');
+      if (!dimension) {
+        throw new EmbedFailureError('index-knowledge: embed-chunks produced no vectors');
+      }
       return { ...inputData, vectors, dimension };
     },
   });
