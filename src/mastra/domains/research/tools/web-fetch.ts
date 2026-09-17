@@ -3,6 +3,8 @@ import { TripWire } from '@mastra/core/agent';
 import { z } from 'zod';
 import { logger } from '../../../shared/logger';
 import { scanToolOutputForInjection } from '../../../shared/processors/security-stack';
+import { WebFetchError } from '../handlers/errors';
+import { fetchAndExtract } from '../functions/web-io';
 
 export const webFetchTool = createTool({
   id: 'research-web-fetch',
@@ -22,28 +24,7 @@ export const webFetchTool = createTool({
   }),
   execute: async ({ url, extractMode = 'summary' }) => {
     try {
-      const response = await fetch(url);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const html = await response.text();
-
-      // Simple HTML to text conversion
-      const text = html
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<[^>]+>/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-
-      // Extract title
-      const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-      const title = titleMatch ? titleMatch[1] : undefined;
-
-      // For summary mode, take first 1000 characters
-      const content = extractMode === 'summary' ? text.substring(0, 1000) : text;
+      const page = await fetchAndExtract(url, extractMode);
 
       // Spec 06 Q3 (DECIDED, option b): scanning boundary at the web-fetch
       // tool-output path — the injected-content gap Scenario 1 documents
@@ -52,18 +33,21 @@ export const webFetchTool = createTool({
       // extracted text is checked BEFORE it enters the agentic loop as a tool
       // result. Inert without a provider key / with SECURITY_PROCESSORS=off
       // (same rule as the stack's slot 2).
-      await scanToolOutputForInjection(content, url);
+      await scanToolOutputForInjection(page.content, url);
 
       return {
-        content,
-        title,
-        wordCount: text.split(/\s+/).length,
+        content: page.content,
+        title: page.title,
+        wordCount: page.wordCount,
       };
     } catch (error) {
       // A flagged payload (TripWire) must surface intact, not as a fetch error.
       if (error instanceof TripWire) throw error;
       logger.error('Web fetch error:', error);
-      throw new Error(`Failed to fetch URL: ${error}`, { cause: error });
+      // `fetchAndExtract` already types and wraps its own failures — wrapping
+      // again would nest the message twice.
+      if (error instanceof WebFetchError) throw error;
+      throw new WebFetchError(`Failed to fetch URL: ${error}`, { cause: error });
     }
   },
 });

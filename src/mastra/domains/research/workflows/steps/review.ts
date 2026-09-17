@@ -1,6 +1,7 @@
 import { createStep } from '@mastra/core/workflows';
 import { z } from 'zod';
 import { logger } from '../../../../shared/logger';
+import { ResearchRejectedError } from '../../handlers/errors';
 import { deepResearchOutputSchema } from '../schemas';
 
 /**
@@ -45,7 +46,7 @@ export const reviewFindingsStep = createStep({
 
     if (!resumeData.approved) {
       // Rejection = terminal failure of the run (a decision, not a crash).
-      throw new Error(
+      throw new ResearchRejectedError(
         `Research findings rejected by reviewer${resumeData.note ? `: ${resumeData.note}` : ''}`
       );
     }

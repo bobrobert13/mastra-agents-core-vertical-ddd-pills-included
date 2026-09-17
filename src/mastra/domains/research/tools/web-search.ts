@@ -1,6 +1,8 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { logger } from '../../../shared/logger';
+import { fetchDuckDuckGo } from '../functions/web-io';
+import { mapDuckDuckGoResults } from '../functions/web-parse';
 
 export const webSearchTool = createTool({
   id: 'research-web-search',
@@ -20,47 +22,13 @@ export const webSearchTool = createTool({
   }),
   execute: async ({ query, maxResults = 5 }) => {
     try {
-      const response = await fetch(
-        `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
-      );
-
-      if (!response.ok) {
-        throw new Error(`DuckDuckGo API error: ${response.status}`);
-      }
-
-      const data = await response.json();
-      const results = [];
-
-      // Add abstract if available
-      if (data.Abstract) {
-        results.push({
-          title: data.Heading || 'Summary',
-          url: data.AbstractURL || '',
-          snippet: data.Abstract,
-        });
-      }
-
-      // Add related topics
-      if (data.RelatedTopics && Array.isArray(data.RelatedTopics)) {
-        for (const topic of data.RelatedTopics.slice(0, maxResults - results.length)) {
-          if (topic.Text && topic.FirstURL) {
-            results.push({
-              title: topic.Text.split(' - ')[0] || topic.Text.substring(0, 60),
-              url: topic.FirstURL,
-              snippet: topic.Text,
-            });
-          }
-        }
-      }
-
-      return {
-        results: results.slice(0, maxResults),
-      };
+      const data = await fetchDuckDuckGo(query);
+      return { results: mapDuckDuckGoResults(data, maxResults) };
     } catch (error) {
+      // Silent degradation (unchanged contract): a failed search is an empty
+      // result set, never a thrown error.
       logger.error('Web search error:', error);
-      return {
-        results: [],
-      };
+      return { results: [] };
     }
   },
 });
