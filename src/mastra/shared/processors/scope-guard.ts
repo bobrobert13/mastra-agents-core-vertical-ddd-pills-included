@@ -1,5 +1,4 @@
 import { Agent } from '@mastra/core/agent';
-import { z } from 'zod';
 import type { InputProcessor } from '@mastra/core/processors';
 import { guardModel } from '../config/model';
 import { hasAnyProviderKey } from '../config/providers';
@@ -18,6 +17,20 @@ export interface DomainScope {
 
 export interface ScopeVerdict {
   inScope: boolean;
+}
+
+/**
+ * Traduce la respuesta del clasificador a un veredicto.
+ *
+ * Exportada a propósito: es la pieza que estaba rota (el modelo devolvía un nombre
+ * de campo distinto y la validación lanzaba), y así se prueba sin red.
+ *
+ * Ante la duda devuelve `inScope: true` — el mismo fail-open del resto del guard:
+ * un clasificador ilegible no puede bloquear tráfico legítimo.
+ */
+export function parseScopeAnswer(text: string): boolean {
+  // `startsWith` y no igualdad: un modelo locuaz contesta "OUT (no es investigación)".
+  return !text.trim().toUpperCase().startsWith('OUT');
 }
 
 export interface ScopeGuardOptions extends DomainScope {
@@ -84,7 +97,7 @@ export function createScopeGuard(options: ScopeGuardOptions): InputProcessor {
       id: `${id}:classifier`,
       name: 'Scope Classifier',
       instructions:
-        'You are a strict topic classifier. Decide whether the user message falls within the declared agent scope. Use structured output only.',
+        'You are a strict topic classifier. Decide whether the user message falls within the declared agent scope.',
       model,
     });
     const prompt = [
@@ -93,13 +106,25 @@ export function createScopeGuard(options: ScopeGuardOptions): InputProcessor {
       '',
       `User message:`,
       text,
+      '',
+      /**
+       * Una sola palabra, y sin JSON a propósito.
+       *
+       * El clasificador pedía antes `structuredOutput: z.object({ inScope: boolean })`.
+       * Con un proveedor que **no** anuncia `supportsStructuredOutputs` —DeepInfra
+       * entre ellos— el esquema no viaja al proveedor: Mastra lo inyecta en el prompt
+       * y queda a merced del modelo. DeepSeek devolvía `{"in_scope": …}` (snake_case),
+       * la validación de zod lanzaba DENTRO de `generate`, y el guard hacía fail-open
+       * en CADA turno: se pagaba la llamada y no se clasificaba nada.
+       *
+       * Con una palabra no hay nombre de campo que acertar, y el fallo vuelve a ser lo
+       * que siempre fue: ruido → fail-open.
+       */
+      'Answer with exactly one word: IN if the message is within scope, OUT if it is not.',
     ].join('\n');
-    const result = await classifierAgent.generate(prompt, {
-      structuredOutput: { schema: z.object({ inScope: z.boolean() }) },
-      modelSettings: { temperature: 0 },
-    });
-    const object = result.object as ScopeVerdict | undefined;
-    return { inScope: object?.inScope !== false };
+
+    const result = await classifierAgent.generate(prompt, { modelSettings: { temperature: 0 } });
+    return { inScope: parseScopeAnswer(result.text) };
   };
 
   const runClassification = classify ?? llmClassify;

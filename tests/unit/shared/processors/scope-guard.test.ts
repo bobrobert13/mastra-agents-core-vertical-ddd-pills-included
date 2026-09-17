@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   createScopeGuard,
+  parseScopeAnswer,
   type DomainScope,
 } from '../../../../src/mastra/shared/processors/scope-guard';
 
@@ -93,5 +94,31 @@ describe('createScopeGuard', () => {
 
     await guard.processInput!({ messages, abort } as never);
     expect(classify).toHaveBeenCalledWith('latest question');
+  });
+});
+
+/**
+ * El parseo del veredicto, que es la pieza que estaba rota: el clasificador pedía
+ * un JSON con esquema y el modelo devolvía otro nombre de campo, así que la
+ * validación lanzaba dentro de `generate` y el guard hacía fail-open en cada turno.
+ */
+describe('parseScopeAnswer', () => {
+  it('lee las dos palabras del contrato', () => {
+    expect(parseScopeAnswer('IN')).toBe(true);
+    expect(parseScopeAnswer('OUT')).toBe(false);
+  });
+
+  it('tolera mayúsculas, espacios y una explicación detrás', () => {
+    expect(parseScopeAnswer('  out  ')).toBe(false);
+    expect(parseScopeAnswer('OUT (no es investigación)')).toBe(false);
+    expect(parseScopeAnswer('In: the user asks about a web source')).toBe(true);
+  });
+
+  it('falla en abierto ante una respuesta ilegible', () => {
+    // Mismo contrato que el resto del guard: el ruido del clasificador no puede
+    // bloquear tráfico legítimo.
+    expect(parseScopeAnswer('')).toBe(true);
+    expect(parseScopeAnswer('no lo sé')).toBe(true);
+    expect(parseScopeAnswer('{"in_scope":false}')).toBe(true);
   });
 });
