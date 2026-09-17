@@ -82,9 +82,9 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
     const { surface } = zeroConfigSurface();
     const byPath = new Map(surface.apiRoutes.map(r => [r.path, r]));
     expect([...byPath.keys()].sort()).toEqual([
+      '/chat/:agentId',
       '/health/version',
       '/hooks/:source',
-      '/stream/:agentId',
     ]);
 
     const webhook = byPath.get('/hooks/:source') as ApiRoute & {
@@ -95,18 +95,18 @@ describe('Spec 08 HTTP surface (buildServerSurface, zero env)', () => {
       handler?: unknown;
       middleware?: unknown[];
     };
-    const stream = byPath.get('/stream/:agentId') as ApiRoute & {
+    const chat = byPath.get('/chat/:agentId') as ApiRoute & {
       handler?: unknown;
       middleware?: unknown[];
     };
     expect(webhook.method).toBe('POST');
     expect(health.method).toBe('GET');
-    expect(stream.method).toBe('POST');
+    expect(chat.method).toBe('POST');
     expect(webhook.requiresAuth).toBe(false); // HMAC is the auth (Spec 01 JWT does not apply)
     expect(health.requiresAuth).toBe(false); // LB probes
-    expect(stream.requiresAuth).not.toBe(false); // default-protected
+    expect(chat.requiresAuth).not.toBe(false); // default-protected
     // handlers present + per-route middleware on the webhook (global mw is skipped on public routes)
-    for (const route of [webhook, health, stream]) expect(route.handler).toBeDefined();
+    for (const route of [webhook, health, chat]) expect(route.handler).toBeDefined();
     expect(webhook.middleware).toHaveLength(2); // rate limiter + signature guard
   });
 

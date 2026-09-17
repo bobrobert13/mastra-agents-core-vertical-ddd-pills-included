@@ -141,7 +141,7 @@ through them ([ADR-009](docs/adr/009-guardrails-security-processor-pipeline.md))
 | `security-stack.ts`       | on by default; `SECURITY_PROCESSORS=off                                            | log`                                                                                       | scope guard alone; deterministic slots stay on |
 | `schedules.ts` / `env.ts` | banner reporting / Zod validation of malformed-present env                         | silent-none / no-op — absence is always legal                                              |
 
-Plus: `custom routes` (`/hooks/:source` HMAC · `/health/version` · `/stream/:agentId` SSE), the outbound
+Plus: `custom routes` (`/hooks/:source` HMAC · `/health/version` · `/chat/:agentId` SSE), the outbound
 read-only `MCPServer`, `AppDatabase` factory, workspace jail, shared response cache, event bus bridge.
 
 ### Quality & ops tooling
@@ -301,11 +301,11 @@ npm run mcp:stdio             # Claude Desktop: bundle + stdio (see README block
 Built-in framework API lives under `/api/*` (auth-protected defaults). **Custom routes are root-level** —
 Mastra 1.66 rejects custom paths starting with `/api` at boot:
 
-| Route                   | Auth                                       | What                                                                          |
-| ----------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
-| `POST /hooks/:source`   | HMAC (`x-webhook-signature: sha256=<hex>`) | verifies raw body, publishes exactly one `webhook.received` on the domain bus |
-| `GET /health/version`   | public                                     | `{status, version, env, user}`                                                |
-| `POST /stream/:agentId` | framework default                          | AI-SDK UI-message SSE (`toAISdkStream` v5) for any agent                      |
+| Route                 | Auth                                       | What                                                                          |
+| --------------------- | ------------------------------------------ | ----------------------------------------------------------------------------- |
+| `POST /hooks/:source` | HMAC (`x-webhook-signature: sha256=<hex>`) | verifies raw body, publishes exactly one `webhook.received` on the domain bus |
+| `GET /health/version` | public                                     | `{status, version, env, user}`                                                |
+| `POST /chat/:agentId` | framework default                          | AI-SDK v7 UI-message SSE (`chatRoute`) for any agent                          |
 
 Frontend wiring without a framework: [`examples/stream-consumer.mjs`](examples/stream-consumer.mjs)
 (`@mastra/client-js`, < 30 LOC). Server-side OTLP tracing: set `OTEL_EXPORTER_OTLP_ENDPOINT` (+ optional
@@ -430,8 +430,8 @@ The [19 gotchas](AGENTS.md#environment-gotchas-learned-the-hard-way) are the lon
   follow-ups riding spec 02's conventions, deliberately unscoped.
 - Jail keeps an accepted symlink-TOCTOU residual (ADR-009); `WORKSPACE_ROOT` resolves against process CWD.
 - Semantic recall works keyless; **answering** still needs a provider key (`generate()` 401s clearly otherwise).
-- The `ai` package is intentionally _not_ a dependency — the streaming route ships a byte-identical local
-  SSE serializer (swap documented in `routes/stream.ts`).
+- The `ai` package is intentionally _not_ a backend dependency — `chatRoute()` from `@mastra/ai-sdk`
+  owns the UI-message SSE wire format, so the route carries no local serializer to keep in sync.
 
 ## 📄 License
 

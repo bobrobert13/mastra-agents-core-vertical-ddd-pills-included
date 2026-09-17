@@ -318,13 +318,15 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
 
   // ── Scenario 4 (also provider-key gated): streaming SSE ──
   describe.skipIf(!hasProviderKey)('streaming (live provider key required)', () => {
-    it('POST /stream/research answers as SSE with a first {"type":"start"} frame', async () => {
+    it('POST /chat/research answers as SSE with a first {"type":"start"} frame', async () => {
       const response = await app.fetch(
-        new Request('http://test.local/stream/research', {
+        new Request('http://test.local/chat/research', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({
-            messages: [{ role: 'user', content: 'say hi' }],
+            messages: [
+              { id: 'http-surface-1', role: 'user', parts: [{ type: 'text', text: 'say hi' }] },
+            ],
             memory: { thread: `http-surface-${Date.now()}`, resource: 'http-surface-test' },
           }),
         })
@@ -348,15 +350,20 @@ describe.skipIf(!RUN)('HTTP surface (integration)', () => {
     }, 120_000);
   });
 
-  it('POST /stream/unknown-agent → 404 with the not-found body (getAgent throws)', async () => {
+  it('POST /chat/unknown-agent fails instead of streaming (chatRoute owns the response)', async () => {
     const response = await app.fetch(
-      new Request('http://test.local/stream/does-not-exist', {
+      new Request('http://test.local/chat/does-not-exist', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ messages: [{ role: 'user', content: 'hi' }] }),
+        body: JSON.stringify({
+          messages: [{ id: 'http-surface-2', role: 'user', parts: [{ type: 'text', text: 'hi' }] }],
+        }),
       })
     );
-    expect(response.status).toBe(404);
-    expect(await response.text()).toBe('{"error":"agent \\"does-not-exist\\" not found"}');
+    // The exact status/body for an unknown agent now belongs to chatRoute()
+    // (@mastra/ai-sdk) — the local 404 body this case used to pin left with the
+    // hand-rolled route. What must hold either way: it does NOT stream.
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.headers.get('content-type') ?? '').not.toMatch(/^text\/event-stream/);
   });
 });

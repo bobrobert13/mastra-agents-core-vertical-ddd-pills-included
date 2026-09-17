@@ -2,7 +2,7 @@ import type { ApiRoute, CorsOptions, Middleware } from '@mastra/core/server';
 
 import type { ServiceRegistry } from '../shared/config/service-status';
 import { logger } from '../shared/logger';
-import { agentStreamRoute } from './stream';
+import { agentChatRoute } from './chat';
 import { healthVersionRoute } from './health';
 import { webhookRoute } from './webhook';
 import { createRateLimiter, readRateLimitConfig } from './middleware/rate-limit';
@@ -10,7 +10,7 @@ import { requestContextPopulator } from './middleware/request-context';
 
 export { webhookRoute } from './webhook';
 export { healthVersionRoute } from './health';
-export { agentStreamRoute } from './stream';
+export { agentChatRoute } from './chat';
 
 /** Everything the `server` config of `new Mastra({ ... })` gains from this surface. */
 export interface ServerSurface {
@@ -114,6 +114,6 @@ export function buildServerSurface(services: ServiceRegistry): ServerSurface {
   return {
     ...(cors && { cors }),
     middleware,
-    apiRoutes: [webhookRoute, healthVersionRoute, agentStreamRoute],
+    apiRoutes: [webhookRoute, healthVersionRoute, agentChatRoute],
   };
 }

@@ -17,7 +17,7 @@ object literal: `mastra dev` statically extracts it).
 | `index.ts` | `buildServerSurface(services)` → `{ cors?, middleware, apiRoutes }`; pushes the CORS / Rate limiting / Webhook signing `ServiceStatus` rows (inactive strings verbatim from spec 08 §3.7) |
 | `webhook.ts` | `POST /hooks/:source` — HMAC-verified raw body → exactly one `webhook.received` publish; NO domain logic here (vertical-slice rule) |
 | `health.ts` | `GET /health/version` — status/version/env + Spec 01 `requestContext.get('user')` read contract demo |
-| `stream.ts` | `POST /stream/:agentId` — `agent.stream()` + `toAISdkStream` → AI-SDK v5 UI SSE (`data: {json}\n\n`, `[DONE]`); 404 on unknown agent (getAgent throws) |
+| `chat.ts` | `POST /chat/:agentId` — `chatRoute({ version: 'v7' })` from `@mastra/ai-sdk`: AI-SDK v7 UI-message SSE over `{ messages: UIMessage[], memory }`. The package owns the wire format, so no serializer lives here |
 | `middleware/types.ts` | `RouteMiddleware` = `MiddlewareHandler` extracted from @mastra/core's own `Middleware` union — the ONLY way to satisfy `tsc --noEmit` (two incompatible Hono type copies exist; `declare module 'hono'` augments the WRONG one — gate finding 08-1 alternative instead) |
 | `middleware/webhook-signature.ts` | `computeSignature`/`verifySignature` (`timingSafeEqual`) + fail-closed `requireSignedRequest()` (unset secret ⇒ identical 401) |
 | `middleware/rate-limit.ts` | in-memory FIXED-window limiter; both env vars required together; XFF first hop (spoofable without trusted-proxy) |
