@@ -1,4 +1,7 @@
-export { researchAgent, researchScope, researchScopeGuard } from './agent';
+export { researchScope } from './scope';
+export { researchSettings } from './config';
+export { researchInstructions } from './instructions';
+export { researchAgent, researchScopeGuard } from './agent';
 export { researchSecurityStack } from './agent';
 export { webSearchTool, webFetchTool, summarizeTool } from './tools';
 export { deepResearchWorkflow } from './workflows/deep-research';

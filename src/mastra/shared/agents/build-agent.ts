@@ -37,10 +37,6 @@ export interface BuildAgentOptions {
   connectors?: AgentConnectors;
   /** Override maxSteps — defaults to 30 */
   maxSteps?: number;
-  /**
-   * @deprecated usa connectors: { memory: 'observational' } — se retira en la próxima wave
-   */
-  enableObservationalMemory?: boolean;
   /** Disable response cache — REQUIRED for mutating agents (spec 06 R2) */
   disableResponseCache?: boolean;
   /** Additional Agent config overrides */
@@ -58,6 +54,16 @@ export interface BuildAgentOptions {
     >
   >;
 }
+
+/**
+ * The per-domain knobs a domain declares in its own `config.ts`. Picking them
+ * from `BuildAgentOptions` keeps the domain settings object type-checked
+ * against the builder (a typo in `rag`/`memory` fails the build).
+ */
+export type DomainAgentSettings = Pick<
+  BuildAgentOptions,
+  'modelKey' | 'maxSteps' | 'connectors' | 'disableResponseCache'
+>;
 
 /**
  * Builds a domain agent with security stack, memory, and scorers wired by default.
@@ -84,7 +90,6 @@ export function buildDomainAgent(options: BuildAgentOptions): Agent {
     tools,
     connectors,
     maxSteps = 30,
-    enableObservationalMemory = false,
     disableResponseCache = false,
     overrides = {},
   } = options;
@@ -93,9 +98,8 @@ export function buildDomainAgent(options: BuildAgentOptions): Agent {
   const securityStack = buildSecurityStack({ scope, disableResponseCache });
   const agentId = `${scope.domain}-agent`;
 
-  // Memory tier: the connector wins; the deprecated boolean is the legacy alias.
-  const tier: MemoryTier =
-    connectors?.memory ?? (enableObservationalMemory ? 'observational' : 'basic');
+  // Memory tier comes from the connector alone: 'basic' when nothing is asked.
+  const tier: MemoryTier = connectors?.memory ?? 'basic';
   const memory = buildDomainMemory(memoryOptionsFor(tier));
 
   // Merge connector tools with local tools. Local tools WIN on key collisions.

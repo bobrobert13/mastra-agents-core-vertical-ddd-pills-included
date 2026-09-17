@@ -1,39 +1,11 @@
-import {
-  buildDomainAgent,
-  createScopeGuard,
-  type DomainScope,
-} from '../../shared/agents/build-agent';
+import { buildDomainAgent, createScopeGuard } from '../../shared/agents/build-agent';
 import { buildSecurityStack } from '../../shared/processors/security-stack';
 import { readFileTool } from './tools/read-file';
 import { writeFileTool } from './tools/write-file';
 import { editFileTool } from './tools/edit-file';
-
-export const fileOperationsScope: DomainScope = {
-  domain: 'file-operations',
-  agentName: 'File Operations Agent',
-  scope:
-    'local file operations — reading, writing or editing files at paths the user provides',
-  outOfScopeExamples: [
-    'general-knowledge, historical or religious questions (answer ONLY from files, never from memory)',
-    'web research requests',
-    'task creation or scheduling',
-    'anything that does not involve a concrete local file',
-  ],
-  siblings: [
-    {
-      name: 'Research Agent',
-      description: 'web research: search, fetch and summarize sources',
-    },
-    {
-      name: 'Task Management Agent',
-      description: 'create, update and schedule tasks',
-    },
-    {
-      name: 'Communication Agent',
-      description: 'clarify user intent with structured questions',
-    },
-  ],
-};
+import { fileOperationsScope } from './scope';
+import { fileOperationsSettings } from './config';
+import { fileOperationsInstructions } from './instructions';
 
 // Kept for backward compat — structural wiring tests reference these exports
 export const fileOperationsScopeGuard = createScopeGuard(fileOperationsScope);
@@ -44,27 +16,7 @@ export const fileOperationsSecurityStack = buildSecurityStack({
 
 export const fileOperationsAgent = buildDomainAgent({
   scope: fileOperationsScope,
-  instructionsBody: `You are a file operations specialist. Help users read, write, and edit files.
-
-Your capabilities:
-- Read file contents
-- Write new files or overwrite existing ones
-- Edit files by finding and replacing text
-
-When working with files:
-1. Always confirm the file path with the user
-2. Read before writing when editing
-3. Be careful with destructive operations
-4. Provide clear feedback on what was done
-5. Handle errors gracefully
-
-Always be precise and cautious with file operations.`,
-  modelKey: 'files',
-  maxSteps: 20,
-  disableResponseCache: true, // mutating agent — cache hits would replay tool calls (spec 06 R2)
-  tools: {
-    read_file: readFileTool,
-    write_file: writeFileTool,
-    edit_file: editFileTool,
-  },
+  instructionsBody: fileOperationsInstructions,
+  tools: { read_file: readFileTool, write_file: writeFileTool, edit_file: editFileTool },
+  ...fileOperationsSettings,
 });
