@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  buildScopeClassifierPrompt,
   createScopeGuard,
   parseScopeAnswer,
   type DomainScope,
@@ -120,5 +121,52 @@ describe('parseScopeAnswer', () => {
     expect(parseScopeAnswer('')).toBe(true);
     expect(parseScopeAnswer('no lo sé')).toBe(true);
     expect(parseScopeAnswer('{"in_scope":false}')).toBe(true);
+  });
+});
+
+/**
+ * Contrato del prompt (2026-09-17). La política del guard ES el texto del
+ * prompt, así que se prueba aquí sin red — mismo criterio que
+ * `parseScopeAnswer`. El caso vivo (un saludo real que NO debe disparar el
+ * tripwire) vive en `tests/integration/scope-guard-live.test.ts`.
+ */
+describe('buildScopeClassifierPrompt', () => {
+  const build = () =>
+    buildScopeClassifierPrompt({
+      scope: 'local file operations',
+      outOfScopeExamples: ['general knowledge questions', 'task scheduling'],
+      text: 'hola',
+    });
+
+  it('lleva el scope, los ejemplos de otro dominio y el mensaje del usuario', () => {
+    const prompt = build();
+    expect(prompt).toContain('Agent scope: local file operations');
+    expect(prompt).toContain('general knowledge questions | task scheduling');
+    expect(prompt).toContain('hola');
+  });
+
+  it('mantiene el contrato de UNA palabra que parseScopeAnswer sabe leer', () => {
+    const prompt = build();
+    expect(prompt).toContain('Answer with exactly one word:');
+    expect(prompt).toContain('IN if');
+    expect(prompt).toContain('OUT only if');
+    // el parseo real de la respuesta sigue siendo el mismo contrato
+    expect(parseScopeAnswer('IN')).toBe(true);
+    expect(parseScopeAnswer('OUT')).toBe(false);
+  });
+
+  it('deja pasar conversación, meta-preguntas del propio agente y seguimientos', () => {
+    const prompt = build();
+    expect(prompt).toContain('conversational');
+    expect(prompt).toContain('greeting');
+    expect(prompt).toContain('what it does, how to use it');
+    expect(prompt).toContain('chat client opens with exactly these');
+  });
+
+  it('reserva OUT a una petición SUSTANTIVA que pertenezca a otro dominio', () => {
+    const prompt = build();
+    expect(prompt).toContain('OUT only if the message is a SUBSTANTIVE request');
+    // el motivo de bloquear: responder de memoria propia o actuar fuera de su dominio
+    expect(prompt).toContain('own general knowledge');
   });
 });

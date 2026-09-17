@@ -42,6 +42,44 @@ export interface ScopeGuardOptions extends DomainScope {
   enabled?: boolean;
 }
 
+/** Inputs of the classifier prompt (exported for the offline prompt-contract test). */
+export interface ScopeClassifierPromptInput {
+  scope: string;
+  outOfScopeExamples: string[];
+  text: string;
+}
+
+/**
+ * Prompt del clasificador. Exportado para poder probar el CONTRATO sin red —
+ * misma razón que `parseScopeAnswer`.
+ *
+ * Política (2026-09-17, incidente real: un cliente de chat recibía el tripwire
+ * al escribir "hola" en `chat/nuevo`). El prompt anterior —"strict topic
+ * classifier", con las preguntas de cultura general en la lista de fuera de
+ * alcance— mandaba a OUT CUALQUIER mensaje que no fuese una petición de trabajo:
+ * el saludo de apertura, un "gracias", un "¿qué puedes hacer?" o el seguimiento
+ * corto de una conversación en curso. Desde el cliente eso se ve como un chat
+ * roto, no como un guardarraíl.
+ *
+ * Contrato vigente: conversación, meta-preguntas del propio agente y
+ * seguimientos pasan; OUT queda reservado a una petición SUSTANTIVA que
+ * pertenezca a otro dominio (el agente tendría que responderla de su propia
+ * memoria o ejecutar una acción que no es suya).
+ */
+export function buildScopeClassifierPrompt(input: ScopeClassifierPromptInput): string {
+  return [
+    `Agent scope: ${input.scope}`,
+    `Substantive requests that belong to ANOTHER domain: ${input.outOfScopeExamples.join(' | ')}`,
+    '',
+    `User message:`,
+    input.text,
+    '',
+    'Answer with exactly one word:',
+    'IN if the message is within scope, OR it is conversational (a greeting, thanks, an acknowledgement), OR it asks about this agent itself (what it does, how to use it) — a chat client opens with exactly these.',
+    'OUT only if the message is a SUBSTANTIVE request that belongs to another domain, i.e. this agent would have to answer it from its own general knowledge or take an action it does not own.',
+  ].join('\n');
+}
+
 interface MessageLike {
   role?: string;
   content?: { parts?: unknown[] };
@@ -68,9 +106,15 @@ function extractLastUserText(messages: MessageLike[]): string {
 
 /**
  * Hard scope enforcement for every domain agent: classifies the last user
- * message and aborts (TripWire, before the LLM runs) when it falls outside
- * the agent's scope — so a specialist never answers off-topic from model
- * knowledge and never tool-calls on hallucinated input.
+ * message and aborts (TripWire, before the LLM runs) when it is a SUBSTANTIVE
+ * request outside the agent's scope — so a specialist never answers off-topic
+ * from model knowledge and never tool-calls on hallucinated input.
+ *
+ * Conversational input (greetings, thanks, acknowledgements), questions about
+ * the agent itself and short follow-ups of an in-scope request PASS: a client
+ * chat opens with a greeting, and blocking that reads as a broken product
+ * (2026-09-17 incident). The exact contract lives in
+ * `buildScopeClassifierPrompt()`.
  *
  * Classifier errors fail OPEN (message passes, warning logged): the guard
  * must never break legitimate traffic, and with no provider key configured
@@ -97,32 +141,23 @@ export function createScopeGuard(options: ScopeGuardOptions): InputProcessor {
       id: `${id}:classifier`,
       name: 'Scope Classifier',
       instructions:
-        'You are a strict topic classifier. Decide whether the user message falls within the declared agent scope.',
+        'You are a topic classifier for one specialist agent. You only label the message — you never answer it.',
       model,
     });
-    const prompt = [
-      `Agent scope: ${scope}`,
-      `Typical out-of-scope messages: ${outOfScopeExamples.join(' | ')}`,
-      '',
-      `User message:`,
-      text,
-      '',
-      /**
-       * Una sola palabra, y sin JSON a propósito.
-       *
-       * El clasificador pedía antes `structuredOutput: z.object({ inScope: boolean })`.
-       * Con un proveedor que **no** anuncia `supportsStructuredOutputs` —DeepInfra
-       * entre ellos— el esquema no viaja al proveedor: Mastra lo inyecta en el prompt
-       * y queda a merced del modelo. DeepSeek devolvía `{"in_scope": …}` (snake_case),
-       * la validación de zod lanzaba DENTRO de `generate`, y el guard hacía fail-open
-       * en CADA turno: se pagaba la llamada y no se clasificaba nada.
-       *
-       * Con una palabra no hay nombre de campo que acertar, y el fallo vuelve a ser lo
-       * que siempre fue: ruido → fail-open.
-       */
-      'Answer with exactly one word: IN if the message is within scope, OUT if it is not.',
-    ].join('\n');
-
+    /**
+     * Una sola palabra, y sin JSON a propósito.
+     *
+     * El clasificador pedía antes `structuredOutput: z.object({ inScope: boolean })`.
+     * Con un proveedor que **no** anuncia `supportsStructuredOutputs` —DeepInfra
+     * entre ellos— el esquema no viaja al proveedor: Mastra lo inyecta en el prompt
+     * y queda a merced del modelo. DeepSeek devolvía `{"in_scope": …}` (snake_case),
+     * la validación de zod lanzaba DENTRO de `generate`, y el guard hacía fail-open
+     * en CADA turno: se pagaba la llamada y no se clasificaba nada.
+     *
+     * El texto del contrato vive en `buildScopeClassifierPrompt()` (arriba) para
+     * que la política sea probable sin red.
+     */
+    const prompt = buildScopeClassifierPrompt({ scope, outOfScopeExamples, text });
     const result = await classifierAgent.generate(prompt, { modelSettings: { temperature: 0 } });
     return { inScope: parseScopeAnswer(result.text) };
   };

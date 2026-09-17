@@ -95,7 +95,7 @@ export function registerSecurityStackStatus(services: ServiceRegistry, hasProvid
 
 | Slot | Processor | Entry array | Config (verified options; env overrides where shown) | Offline behavior |
 |---|---|---|---|---|
-| 0 | `createScopeGuard(scope)` | input | unchanged (existing) | inert without provider key (today's rule) |
+| 0 | `createScopeGuard(scope)` | input | unchanged (existing) — policy amendment 2026-09-17: OUT only for a SUBSTANTIVE request owned by another domain; conversational/meta/follow-up input passes, contract in `buildScopeClassifierPrompt()` | inert without provider key (today's rule) |
 | 1 | `new TokenLimiter({ limit })` | input | `limit: Number(TOKEN_LIMIT ?? 8000)` | **deterministic — always active** (`tokenx` estimation, no BPE/encoder, no LLM) |
 | 2 | `new PromptInjectionDetector({...})` | input | `{ model: securityModel(), threshold: Number(PI_THRESHOLD ?? 0.8), strategy: mode==='log' ? 'warn' : 'block', detectionTypes: ['injection','jailbreak','system-override'], lastMessageOnly: true }` | **omitted from the array** when no provider key (see inert rule) |
 | 3 | `new ResponseCache({ cache, ttl, agentId })` | input | `{ cache: sharedInMemoryCache, ttl: Number(RESPONSE_CACHE_TTL ?? 300), agentId: scope.domain }` — **last** in input array | deterministic; disabled by `RESPONSE_CACHE=off` |
