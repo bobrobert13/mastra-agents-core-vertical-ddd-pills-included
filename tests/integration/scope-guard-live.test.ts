@@ -15,13 +15,20 @@ const hasProviderKey = [
 /**
  * Regression for the real incident: the file-operations agent answered an
  * off-topic general-knowledge question from model memory (and hallucinated a
- * file read). The scope guard must TripWire that input before the LLM runs.
+ * file read). The scope guard must keep that input from being answered.
  * Skipped (not failed) without a provider key: the guard fails open there.
  *
  * Second regression (2026-09-17): the Astro chat client was TripWired on the
  * FIRST message of a new thread — a greeting — so the user saw the scope notice
  * instead of a reply. Conversational input and questions about the agent itself
  * must reach the model; only substantive cross-domain requests are OUT.
+ *
+ * Third regression (2026-09-17, second pass): a hard cut (TripWire) turned an
+ * out-of-scope request into an amber block notice instead of a reply. The
+ * default mode is now `redirect`: the request text is REPLACED by a controlled
+ * instruction, so the AGENT answers the refusal without ever seeing the request
+ * (`SCOPE_GUARD_MODE=block` restores the hard cut; that path is covered
+ * offline in tests/unit/shared/processors/scope-guard.test.ts).
  *
  * The agent runs through a minimal Mastra harness: Memory needs the instance's
  * storage + vector store, and a bare domain agent has neither (the real
@@ -44,13 +51,15 @@ function generate(message: string, thread: string) {
 }
 
 describe.skipIf(!hasProviderKey)('scope guard live enforcement', () => {
-  it('aborts an off-topic question with a redirect instead of answering', async () => {
+  it('redirects an off-topic question: the agent answers the refusal, no TripWire', async () => {
     const result = await generate('¿qué pasó en la resurrección de Cristo?', `off-topic-${Date.now()}`);
 
-    expect(result.text).toBe('');
-    expect(result.tripwire).toBeDefined();
-    expect(String(result.tripwire?.reason)).toContain('File Operations Agent only handles');
-    expect(String(result.tripwire?.reason)).toContain('Research Agent');
+    // El flujo no se corta: hay respuesta del agente y no hay tripwire.
+    expect(result.tripwire).toBeUndefined();
+    expect(result.text.trim().length).toBeGreaterThan(0);
+    // La instrucción de redirección nombra al hermano correcto y el modelo lo sigue
+    // (la pregunta original nunca llega al modelo: se reemplazó su texto).
+    expect(result.text).toMatch(/Research Agent|investigaci/i);
   }, 120_000);
 
   it.each(['hola', '¿qué puedes hacer?'])(
@@ -64,11 +73,11 @@ describe.skipIf(!hasProviderKey)('scope guard live enforcement', () => {
     120_000
   );
 
-  it('still blocks a substantive request owned by another domain', async () => {
+  it('also redirects a substantive request owned by another domain', async () => {
     const result = await generate('créame una tarea para revisar el informe mañana', `cross-domain-${Date.now()}`);
 
-    expect(result.text).toBe('');
-    expect(result.tripwire).toBeDefined();
-    expect(String(result.tripwire?.reason)).toContain('Task Management Agent');
+    expect(result.tripwire).toBeUndefined();
+    expect(result.text.trim().length).toBeGreaterThan(0);
+    expect(result.text).toMatch(/Task Management Agent|tareas/i);
   }, 120_000);
 });

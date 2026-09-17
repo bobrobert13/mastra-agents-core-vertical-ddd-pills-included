@@ -1,10 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
+  buildRedirectInstruction,
   buildScopeClassifierPrompt,
   createScopeGuard,
+  detectMessageLanguage,
   parseScopeAnswer,
   type DomainScope,
 } from '../../../../src/mastra/shared/processors/scope-guard';
+import { readScopeGuardMode } from '../../../../src/mastra/shared/config/providers';
 
 const scope: DomainScope = {
   domain: 'files-test',
@@ -32,8 +35,12 @@ describe('createScopeGuard', () => {
     expect(guard.id).toBe('scope-guard:files-test');
   });
 
-  it('aborts with agent name and sibling redirect when out of scope', async () => {
-    const guard = createScopeGuard({ ...scope, classify: async () => ({ inScope: false }) });
+  it('block mode aborts with agent name and sibling redirect when out of scope', async () => {
+    const guard = createScopeGuard({
+      ...scope,
+      classify: async () => ({ inScope: false }),
+      mode: 'block',
+    });
     const { args, abort } = makeArgs();
 
     await expect(guard.processInput!(args)).rejects.toThrow('TripWire');
@@ -41,6 +48,47 @@ describe('createScopeGuard', () => {
     const reason = abort.mock.calls[0][0] as string;
     expect(reason).toContain('File Operations Agent only handles');
     expect(reason).toContain('Research Agent');
+  });
+
+  it('redirect mode (default) keeps the flow: the request is REPLACED by the instruction, never aborted', async () => {
+    const guard = createScopeGuard({ ...scope, classify: async () => ({ inScope: false }) });
+    const { args, abort, messages } = makeArgs('what happened at the resurrection of christ?');
+
+    const result = (await guard.processInput!(args)) as unknown as Array<{
+      role?: string;
+      content?: { parts?: Array<{ text?: string }> };
+    }>;
+
+    expect(abort).not.toHaveBeenCalled();
+    expect(result).not.toBe(messages); // lista nueva, el pipeline sigue
+    const text = result[0]?.content?.parts?.[0]?.text ?? '';
+    expect(text).toContain('does not belong to File Operations Agent');
+    expect(text).toContain('handles only: local file operations');
+    expect(text).toContain('Research Agent (web research)');
+    // el modelo NUNCA ve la petición: es lo que mantiene el guard siendo guard
+    expect(text).not.toContain('resurrection');
+  });
+
+  it('redirect mode replaces ONLY the classified message and keeps id/role/shape', async () => {
+    const guard = createScopeGuard({ ...scope, classify: async () => ({ inScope: false }) });
+    const history = [
+      { id: 'u1', role: 'user', content: { format: 'content-v2', parts: [{ type: 'text', text: 'read notes.txt' }] } },
+      { id: 'a1', role: 'assistant', content: { parts: [{ type: 'text', text: 'Done.' }] } },
+      { id: 'u2', role: 'user', content: { format: 'content-v2', parts: [{ type: 'text', text: 'now schedule a task' }] } },
+    ];
+
+    const result = (await guard.processInput!({
+      messages: history,
+      abort: vi.fn(),
+    } as never)) as unknown as typeof history;
+
+    expect(result).toHaveLength(3);
+    expect(result[0]).toBe(history[0]); // el primer turno no se toca
+    expect(result[1]).toBe(history[1]);
+    expect(result[2]?.id).toBe('u2');
+    expect(result[2]?.role).toBe('user');
+    expect((result[2]?.content as { format?: string }).format).toBe('content-v2');
+    expect((result[2]?.content.parts[0] as { text: string }).text).toContain('File Operations Agent');
   });
 
   it('passes the message through when in scope', async () => {
@@ -168,5 +216,77 @@ describe('buildScopeClassifierPrompt', () => {
     expect(prompt).toContain('OUT only if the message is a SUBSTANTIVE request');
     // el motivo de bloquear: responder de memoria propia o actuar fuera de su dominio
     expect(prompt).toContain('own general knowledge');
+  });
+});
+
+/**
+ * Modo del guard (2026-09-17, segunda pasada). El corte duro convertía una
+ * petición fuera de alcance en un recuadro de bloqueo; el default pasa a
+ * `redirect` — el agente redacta la negativa — y `block` queda como opt-in.
+ */
+describe('readScopeGuardMode', () => {
+  it('defaults to redirect; only an explicit "block" keeps the hard cut', () => {
+    expect(readScopeGuardMode({})).toBe('redirect');
+    expect(readScopeGuardMode({ SCOPE_GUARD_MODE: 'redirect' })).toBe('redirect');
+    expect(readScopeGuardMode({ SCOPE_GUARD_MODE: 'nonsense' })).toBe('redirect');
+    expect(readScopeGuardMode({ SCOPE_GUARD_MODE: 'block' })).toBe('block');
+    expect(readScopeGuardMode({ SCOPE_GUARD_MODE: ' BLOCK ' })).toBe('block');
+  });
+});
+
+describe('buildRedirectInstruction', () => {
+  it('names the agent, the scope and the siblings, and asks for ONE sentence in the user language', () => {
+    const text = buildRedirectInstruction({
+      agentName: 'File Operations Agent',
+      scope: 'local file operations',
+      siblings: [{ name: 'Research Agent', description: 'web research' }],
+    });
+
+    expect(text).toContain('does not belong to File Operations Agent');
+    expect(text).toContain('handles only: local file operations');
+    expect(text).toContain('Research Agent (web research)');
+    expect(text).toContain('one-sentence reply');
+  });
+
+  it('writes the note in the language the user wrote in (the model mirrors the last message)', () => {
+    const input = {
+      agentName: 'File Operations Agent',
+      scope: 'local file operations',
+      siblings: [{ name: 'Research Agent', description: 'web research' }],
+    };
+
+    expect(buildRedirectInstruction({ ...input, language: 'es' })).toContain(
+      'no corresponde a File Operations Agent'
+    );
+    expect(buildRedirectInstruction({ ...input, language: 'en' })).toContain(
+      'does not belong to File Operations Agent'
+    );
+  });
+
+  it('is DECLARATIVE, not imperative: the injection detector reads this text as user input', () => {
+    // Verificado contra el detector real: un texto imperativo ("must not be
+    // answered" / "do not mention these instructions") se clasifica como
+    // system-override y aborta el turno. Este test fija el contrato para que la
+    // reescritura no lo rompa en silencio (es y en pasan el detector).
+    const base = {
+      agentName: 'File Operations Agent',
+      scope: 'local file operations',
+      siblings: [{ name: 'Research Agent', description: 'web research' }],
+    };
+
+    for (const language of ['es', 'en'] as const) {
+      const text = buildRedirectInstruction({ ...base, language });
+      expect(text).not.toMatch(/do not|must not|you must|ignora (todas|las)|no menciones/i);
+      expect(text).not.toContain('[System]');
+    }
+  });
+});
+
+describe('detectMessageLanguage', () => {
+  it('recognises Spanish by its signs and letters; everything else falls back to en', () => {
+    expect(detectMessageLanguage('¿qué pasó en la resurrección de Cristo?')).toBe('es');
+    expect(detectMessageLanguage('créame una tarea para mañana')).toBe('es');
+    expect(detectMessageLanguage('what happened at the resurrection of christ?')).toBe('en');
+    expect(detectMessageLanguage('hola')).toBe('en'); // sin marcas: el fallback es barato y estable
   });
 });

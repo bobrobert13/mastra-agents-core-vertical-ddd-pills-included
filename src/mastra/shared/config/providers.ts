@@ -33,6 +33,19 @@ export function detectModelProviders(services: ServiceRegistry): void {
   });
 }
 
+/** Cómo responde el scope guard cuando el mensaje es de otro dominio. */
+export type ScopeGuardMode = 'redirect' | 'block';
+
+/**
+ * Modo del scope guard (env `SCOPE_GUARD_MODE`), resuelto aquí y no en el
+ * processor porque el banner también lo reporta: `redirect` (default desde
+ * 2026-09-17) deja que el agente redacte la negativa sin ver la petición;
+ * `block` conserva el corte duro (TripWire antes del modelo).
+ */
+export function readScopeGuardMode(env: NodeJS.ProcessEnv = process.env): ScopeGuardMode {
+  return (env.SCOPE_GUARD_MODE ?? '').trim().toLowerCase() === 'block' ? 'block' : 'redirect';
+}
+
 /** Scope-guard status: on by default, needs a provider key to classify. */
 export function detectScopeGuard(services: ServiceRegistry, hasProviderKeys: boolean): void {
   if (process.env.SCOPE_GUARD === 'off') {
@@ -48,7 +61,9 @@ export function detectScopeGuard(services: ServiceRegistry, hasProviderKeys: boo
     name: 'Scope guard',
     active: hasProviderKeys,
     detail: hasProviderKeys
-      ? 'active (agents refuse out-of-scope input)'
+      ? readScopeGuardMode() === 'block'
+        ? 'active (out-of-scope input → blocked with a notice)'
+        : 'active (out-of-scope input → the agent answers the refusal)'
       : 'inert without a provider key (fails open)',
   });
 }

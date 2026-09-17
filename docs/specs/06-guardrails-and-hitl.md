@@ -4,6 +4,8 @@
 > Phase: 6 (from `docs/PRODUCTION-GAP-ANALYSIS.md` §5 execution order) — covers gap-analysis §2.7 (built-in guardrails next to the scope guard) and §2.6 (HITL with suspend/resume); boundary vs §2.2 (MCP): **MCP tool-approval policy is owned by spec 04** — this spec owns agent-side and workflow-side approval mechanics only (see forward/back pointers in Phase 3).
 > Id: `06` · Depends-on: **none required** · Recommended after spec `02` (Redis bridge — see ResponseCache multi-process caveat) · Co-design with spec `04` (approval callback conventions) · Status: **DRAFT**
 > Verified against `@mastra/core@1.66.0` (installed) + canonical docs; every API claim carries a source URL (Appendix A). Decisions not settled by a human are inline-flagged **PROPOSAL**.
+>
+> **Amendment (2026-09-17) — scope-guard OUT behaviour.** This spec fixes the pipeline *order* and the composition of the built-in guardrails; the scope guard's own OUT path changed after a product incident: a hard cut (`abort()` → TripWire → text-free stream) turned a cross-domain request into a block notice instead of a reply. Default is now `SCOPE_GUARD_MODE=redirect`: the classified message's text is replaced by a declarative note so the AGENT answers the refusal while the model never sees the request; `block` restores `abort()`. The detector slots (injection/PII), their `abort()` semantics and every Scenario below are unchanged. Contract details live in root `AGENTS.md` gotcha #7 and `tests/unit/shared/processors/scope-guard.test.ts`.
 
 ---
 
