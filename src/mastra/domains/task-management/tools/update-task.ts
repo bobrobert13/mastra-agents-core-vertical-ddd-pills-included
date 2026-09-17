@@ -1,30 +1,14 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { requireAppDb } from '../../../shared/config/db';
-import { logger } from '../../../shared/logger';
-import { eventBus, makeEvent } from '../../../shared/events';
-import { createTaskRepository } from '../repo';
-import {
-  taskUpdatedEvent,
-  taskCompletedEvent,
-} from '../events';
+import { isFail } from '../../../shared/handlers';
+import { executeTaskUpdate, updateTaskInputSchema } from '../functions/update-task';
+import { TaskConflictError } from '../handlers/errors';
+import { toUpdateFailureReason } from '../handlers/responses';
 
 export const updateTaskTool = createTool({
   id: 'task-update',
   description: 'Update an existing task (guarded write with optimistic locking)',
-  inputSchema: z.object({
-    taskId: z.string().describe('Task ID'),
-    title: z.string().optional(),
-    description: z.string().optional(),
-    status: z.enum(['pending', 'in-progress', 'completed']).optional(),
-    priority: z.enum(['low', 'medium', 'high']).optional(),
-    expectedVersion: z
-      .number()
-      .int()
-      .positive()
-      .optional()
-      .describe('Optimistic lock: fail with CONFLICT if the row moved past this version'),
-  }),
+  inputSchema: updateTaskInputSchema,
   outputSchema: z.object({
     taskId: z.string(),
     updated: z.boolean(),
@@ -39,82 +23,44 @@ export const updateTaskTool = createTool({
       })
       .optional(),
   }),
-  execute: async ({ taskId, title, description, status, priority, expectedVersion }) => {
-    const db = await requireAppDb('task-update');
-    const repo = createTaskRepository(db);
+  execute: async input => {
+    const { taskId } = input;
+    const result = await executeTaskUpdate(input);
 
-    const current = await repo.getTask(taskId);
-    if (!current) {
+    if (isFail(result)) {
+      const error = result.error;
+      const reason = toUpdateFailureReason(error);
+      // Infrastructure failures (DB down, …) keep propagating instead of
+      // masquerading as a NOT_FOUND/CONFLICT business outcome.
+      if (reason === undefined) throw error;
       return {
         taskId,
         updated: false,
-        reason: 'NOT_FOUND' as const,
-        message: `Task ${taskId} not found — nothing was updated.`,
-      };
-    }
-
-    const changes: Record<string, unknown> = {};
-    if (title !== undefined) changes.title = title;
-    if (description !== undefined) changes.description = description;
-    if (status !== undefined) changes.status = status;
-    if (priority !== undefined) changes.priority = priority;
-
-    // Last-writer-wins is explicit: guarded UPDATE against the version we
-    // just read (or the caller-supplied one) so a stale write reports
-    // CONFLICT instead of silently corrupting the row (Scenario 5).
-    const updatedRow = await repo.updateTask(taskId, {
-      ...changes,
-      expectVersion: expectedVersion ?? current.version,
-    });
-
-    if (!updatedRow) {
-      const fresh = await repo.getTask(taskId);
-      return {
-        taskId,
-        updated: false,
-        reason: 'CONFLICT' as const,
-        message: `Task ${taskId} changed since it was read (expected version ${
-          expectedVersion ?? current.version
-        }); re-read and retry.`,
-        ...(fresh
+        reason,
+        message: error.message,
+        ...(error instanceof TaskConflictError && error.current
           ? {
               task: {
-                status: fresh.status,
-                priority: fresh.priority,
-                version: fresh.version ?? 0,
-                updatedAt: fresh.updatedAt.toISOString(),
+                status: error.current.status,
+                priority: error.current.priority,
+                version: error.current.version ?? 0,
+                updatedAt: error.current.updatedAt.toISOString(),
               },
             }
           : {}),
       };
     }
 
-    const event = makeEvent(taskUpdatedEvent, {
-      taskId,
-      changes,
-      timestamp: updatedRow.updatedAt,
-    });
-    await eventBus.publish(event);
-
-    if (status === 'completed' && current.status !== 'completed') {
-      const completed = makeEvent(taskCompletedEvent, {
-        taskId,
-        completedAt: updatedRow.updatedAt,
-      });
-      await eventBus.publish(completed);
-    }
-
-    logger.info(`[update_task] task ${taskId} updated to version ${updatedRow.version}`);
-
+    const task = result.unwrap();
     return {
       taskId,
       updated: true,
-      message: `Task ${taskId} updated successfully (version ${updatedRow.version}).`,
+      message: `Task ${taskId} updated successfully (version ${task.version}).`,
       task: {
-        status: updatedRow.status,
-        priority: updatedRow.priority,
-        version: updatedRow.version ?? 0,
-        updatedAt: updatedRow.updatedAt.toISOString(),
+        status: task.status,
+        priority: task.priority,
+        version: task.version ?? 0,
+        updatedAt: task.updatedAt.toISOString(),
       },
     };
   },

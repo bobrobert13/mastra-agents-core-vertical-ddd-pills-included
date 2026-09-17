@@ -4,6 +4,7 @@ export { taskManagementInstructions } from './instructions';
 export { taskManagementAgent, taskManagementScopeGuard } from './agent';
 export { taskManagementSecurityStack } from './agent';
 export { createTaskTool, updateTaskTool, scheduleTaskTool } from './tools';
+export * from './handlers';
 export * from './entities/task';
 export * from './events';
 export {
