@@ -7,7 +7,7 @@ import type { MastraEmbeddingModel } from '@mastra/core/vector';
 import type { SemanticRecall } from '@mastra/core/memory';
 import { logger } from '../logger';
 import { FASTEMBED_MODEL_FILE, fastembedCacheReady } from './fastembed-cache';
-import { resolveEmbedder, type EmbedderResolution } from './model';
+import { resolveEmbedder, type EmbedderResolution } from './embedder';
 import type { ServiceRegistry } from './service-status';
 
 /**
@@ -133,7 +133,7 @@ export function pushRecallBanner(services: ServiceRegistry, r: EmbedderResolutio
     services.push({
       name: 'Knowledge RAG',
       active: true,
-      detail: 'workflow index-knowledge + tool search_knowledge',
+      detail: 'tool search_knowledge registered (opt-in per agent: connectors.rag)',
     });
   } else {
     services.push({ name: 'Semantic recall', active: false, detail: OFF_BANNER_DETAIL });

@@ -22,6 +22,7 @@ afterEach(() => {
 
 function offEnv() {
   delete process.env.SEMANTIC_RECALL;
+  delete process.env.EMBEDDING_CONFIG;
   delete process.env.EMBEDDING_MODEL;
   delete process.env.OPENAI_API_KEY;
   delete process.env.DEEPINFRA_API_KEY;
@@ -129,5 +130,120 @@ describe('existing model.ts exports unchanged (§3.2 extend-only rule)', () => {
     expect(guardModel()).toBe('deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731');
     process.env.MODEL_FILES = 'anthropic/claude-sonnet-4-5';
     expect(agentModel.files()).toBe('anthropic/claude-sonnet-4-5');
+  });
+});
+
+/**
+ * Spec 03 amendment (third pass): the whole embedder declaration lives in ONE
+ * env var. Precedence: SEMANTIC_RECALL=off > EMBEDDING_CONFIG > EMBEDDING_MODEL
+ * > fastembed. A malformed EMBEDDING_CONFIG is a boot error (fail-fast on
+ * PRESENT-but-broken, absence stays legal) — same precedent as MCP_SERVERS.
+ */
+describe('resolveEmbedder() — EMBEDDING_CONFIG branch', () => {
+  it('curated id + provider key in env → model-router, curated dimension, env-config detail', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = JSON.stringify({ id: 'openai/text-embedding-3-small' });
+    process.env.OPENAI_API_KEY = 'test-key';
+
+    const r = resolveEmbedder();
+    expect(r.source).toBe('model-router');
+    expect(r.passage).toBeDefined();
+    expect(r.query).toBe(r.passage);
+    expect(r.dimension).toBe(1536);
+    expect(r.detail).toBe('model-router · openai/text-embedding-3-small · 1536d · env config');
+  });
+
+  it('providerId + modelId with an INLINE apiKey needs no provider env key', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = JSON.stringify({
+      providerId: 'openai',
+      modelId: 'text-embedding-3-small',
+      apiKey: 'sk-inline',
+    });
+
+    const r = resolveEmbedder();
+    expect(r.source).toBe('model-router');
+    expect(r.dimension).toBe(1536); // curated lookup by "provider/model"
+    expect(r.detail).toBe('model-router · openai/text-embedding-3-small · 1536d · env config');
+  });
+
+  it('third-party endpoint: url + headers + explicit dimension are honored', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = JSON.stringify({
+      providerId: 'openai',
+      modelId: 'self-hosted-embed-v1',
+      dimension: 768,
+      url: 'https://gateway.internal/v1',
+      apiKey: 'sk-inline',
+      headers: { 'X-Tenant': 'acme' },
+    });
+
+    const r = resolveEmbedder();
+    expect(r.source).toBe('model-router');
+    expect(r.dimension).toBe(768);
+    expect(r.detail).toBe('model-router · openai/self-hosted-embed-v1 · 768d · env config');
+  });
+
+  it('non-curated id without dimension → dimension undefined (probed at runtime)', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = JSON.stringify({
+      id: 'openai/self-hosted-embed-v1',
+      apiKey: 'sk-inline',
+    });
+
+    const r = resolveEmbedder();
+    expect(r.source).toBe('model-router');
+    expect(r.dimension).toBeUndefined();
+    expect(r.detail).toBe('model-router · openai/self-hosted-embed-v1 · env config');
+  });
+
+  it('EMBEDDING_CONFIG wins over the legacy EMBEDDING_MODEL string', () => {
+    offEnv();
+    process.env.EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+    process.env.EMBEDDING_CONFIG = JSON.stringify({
+      id: 'openai/text-embedding-3-large',
+      apiKey: 'sk-inline',
+    });
+
+    const r = resolveEmbedder();
+    expect(r.detail).toBe('model-router · openai/text-embedding-3-large · 3072d · env config');
+    expect(r.dimension).toBe(3072); // deliberately NOT the legacy 1536 of the small model
+  });
+
+  it('SEMANTIC_RECALL=off beats a perfectly valid EMBEDDING_CONFIG', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = JSON.stringify({
+      id: 'openai/text-embedding-3-small',
+      apiKey: 'sk-inline',
+    });
+    process.env.SEMANTIC_RECALL = 'off';
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    const r = resolveEmbedder();
+    expect(r.source).toBe('none');
+    expect(r.detail).toBe('off (no embedder)');
+    expect(warn).toHaveBeenCalled();
+  });
+
+  it('malformed EMBEDDING_CONFIG throws (fail-fast boot, never a silent degrade)', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = '{"providerId":"openai"}';
+
+    expect(() => resolveEmbedder()).toThrow(/\[Embeddings\] Invalid EMBEDDING_CONFIG:/);
+  });
+
+  it('an unknown provider config that the router refuses degrades to none, never throws', () => {
+    offEnv();
+    process.env.EMBEDDING_CONFIG = JSON.stringify({
+      providerId: 'not-a-real-provider',
+      modelId: 'whatever',
+      apiKey: 'sk-inline',
+    });
+    const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+
+    const r = resolveEmbedder();
+    expect(r.source).toBe('none');
+    expect(r.detail).toBe('off (no embedder)');
+    expect(warn).toHaveBeenCalled();
   });
 });

@@ -12,6 +12,7 @@ function cleanEnv() {
   process.env = { ...originalEnv };
   delete process.env.DATABASE_URL;
   delete process.env.LIBSQL_URL;
+  delete process.env.EMBEDDING_CONFIG;
   delete process.env.EMBEDDING_MODEL;
   delete process.env.SEMANTIC_RECALL;
   delete process.env.OPENAI_API_KEY;
@@ -99,7 +100,7 @@ describe('banner lines — canonical strings (§3.9), both branches', () => {
     );
     const rag = byName(services, 'Knowledge RAG')!;
     expect(render(rag)).toBe(
-      '✅ Knowledge RAG    workflow index-knowledge + tool search_knowledge'
+      '✅ Knowledge RAG    tool search_knowledge registered (opt-in per agent: connectors.rag)'
     );
   });
 
