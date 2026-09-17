@@ -21,7 +21,7 @@
  * (gotcha #5).
  */
 
-import type { MastraScorer } from '@mastra/core/evals';
+import type { MastraScorer, ScoringSamplingConfig } from '@mastra/core/evals';
 import {
   createAnswerRelevancyScorer,
   createBiasScorer,
@@ -153,19 +153,55 @@ export function offlineScorerEntries(): RegistryScorer[] {
 }
 
 /**
+ * Sampling rate for the ONLINE (LLM-judge) scorers on live agent runs.
+ *
+ * Why this exists: `agentScorersFor` wires the matrix into every `new Agent`,
+ * so a live chat turn triggered the judges too — research ran **3 LLM judges per
+ * turn**, on top of the answer itself. The judges are an evaluation instrument,
+ * not a runtime guardrail: judging every production turn pays full price to
+ * re-measure a sample that a fraction of runs already represents.
+ *
+ * `EVAL_ONLINE_SAMPLING_RATE` (default 0.1 = one in ten runs). Mastra resolves
+ * `ratio` by hashing the run's trace id, so the decision is deterministic per
+ * run — the same run never flips between judged and unjudged. `1` restores the
+ * old behavior; `0` turns the live judges off entirely.
+ *
+ * The GATES are unaffected: `tests/evals/gates/_helpers.ts` builds its own
+ * entries from the matrix, so offline gate coverage stays 100%.
+ */
+export function onlineSamplingRate(): number {
+  const raw = process.env.EVAL_ONLINE_SAMPLING_RATE?.trim();
+  if (!raw) return DEFAULT_ONLINE_SAMPLING_RATE;
+  const rate = Number(raw);
+  return Number.isFinite(rate) && rate >= 0 && rate <= 1 ? rate : DEFAULT_ONLINE_SAMPLING_RATE;
+}
+
+export const DEFAULT_ONLINE_SAMPLING_RATE = 0.1;
+
+/**
  * Per-agent `scorers:` record for `new Agent({ ... })` wiring (spec 07 §3.2),
  * keyed by registry ID and built from the matrix — one line per agent.ts:
  *   scorers: agentScorersFor('research-agent'),
  * Live runs emit these scorer scores into storage (Studio per-run views);
  * thresholds are a runEvals/experiment concern and intentionally not part
  * of the agent wiring.
+ *
+ * The `online` entries carry the sampling above; the `offline` ones are model-free
+ * and cost nothing, so they run on every turn.
  */
-export function agentScorersFor(agentId: string): Record<string, { scorer: MastraScorer }> {
+export function agentScorersFor(agentId: string): Record<
+  string,
+  { scorer: MastraScorer; sampling?: ScoringSamplingConfig }
+> {
   const entries = buildEvalScorerEntries();
-  const record: Record<string, { scorer: MastraScorer }> = {};
+  const record: Record<string, { scorer: MastraScorer; sampling?: ScoringSamplingConfig }> = {};
   for (const spec of AGENT_SCORER_MATRIX[agentId] ?? []) {
     const found = entries.find(e => e.id === spec.id);
-    if (found) record[spec.id] = { scorer: found.scorer };
+    if (!found) continue;
+    record[spec.id] =
+      spec.tier === 'online'
+        ? { scorer: found.scorer, sampling: { type: 'ratio', rate: onlineSamplingRate() } }
+        : { scorer: found.scorer };
   }
   return record;
 }

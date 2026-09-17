@@ -104,7 +104,21 @@ export function createInjectionDetector(
     threshold: envNum('PI_THRESHOLD', DEFAULT_PI_THRESHOLD),
     strategy: mode === 'log' ? 'warn' : 'block',
     detectionTypes: ['injection', 'jailbreak', 'system-override'],
-    lastMessageOnly: false,
+    /**
+     * Solo el último mensaje, y esto es una decisión de coste, no un descuido.
+     *
+     * El detector hace **una llamada al modelo por cada mensaje** que recibe, y
+     * este processor corre DESPUÉS de que la memoria haya inyectado el historial
+     * (`lastMessages: 10`). Con `false` cada turno reescaneaba hasta ~11 mensajes
+     * que ya se habían escaneado al llegar: ~11 llamadas al modelo por turno para
+     * volver a decidir exactamente lo mismo.
+     *
+     * El trade-off es real y está documentado en spec 06 §3.4: un mensaje que ya
+     * quedó en el historial no se vuelve a mirar. Se escaneó cuando entró, y el
+     * contenido que entra DURANTE una ejecución (tool output) lo cubre
+     * `scanToolOutputForInjection`. Para volver al modo paranoico: `true` → `false`.
+     */
+    lastMessageOnly: true,
   });
 }
 

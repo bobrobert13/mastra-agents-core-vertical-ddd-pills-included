@@ -2,11 +2,13 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   AGENT_SCORER_MATRIX,
+  DEFAULT_ONLINE_SAMPLING_RATE,
   EVAL_SCORER_IDS,
   agentScorersFor,
   buildEvalScorerEntries,
   buildEvalScorers,
   offlineScorerEntries,
+  onlineSamplingRate,
 } from '../../../../src/mastra/shared/evals/scorers-registry';
 import {
   createToneScorer,
@@ -94,6 +96,31 @@ describe('scorers-registry — §3.2 registration surface', () => {
     expect(research['keyword-coverage'].scorer.id).toBe('keyword-coverage-scorer');
     // unknown agent → empty record, never throws (zero-config)
     expect(agentScorersFor('nope-agent')).toEqual({});
+  });
+
+  it('the ONLINE judges are sampled on live runs; the offline ones are not', () => {
+    const research = agentScorersFor('research-agent');
+    for (const id of ['answer-relevancy', 'faithfulness', 'hallucination']) {
+      expect(research[id], id).toMatchObject({ sampling: { type: 'ratio' } });
+    }
+    // Offline scorers are model-free: sampling them would only lose coverage.
+    for (const id of ['completeness-scorer', 'keyword-coverage', 'research-relevance']) {
+      expect(research[id], id).not.toHaveProperty('sampling');
+    }
+  });
+
+  it('EVAL_ONLINE_SAMPLING_RATE tunes the rate, and a garbage value falls back', () => {
+    process.env.EVAL_ONLINE_SAMPLING_RATE = '1';
+    expect(onlineSamplingRate()).toBe(1);
+    expect(agentScorersFor('research-agent')['answer-relevancy']?.sampling).toEqual({
+      type: 'ratio',
+      rate: 1,
+    });
+
+    process.env.EVAL_ONLINE_SAMPLING_RATE = 'no-es-un-numero';
+    expect(onlineSamplingRate()).toBe(DEFAULT_ONLINE_SAMPLING_RATE);
+    process.env.EVAL_ONLINE_SAMPLING_RATE = '2';
+    expect(onlineSamplingRate()).toBe(DEFAULT_ONLINE_SAMPLING_RATE);
   });
 
   it('judgeModel chain: EVAL_JUDGE_MODEL > MODEL > DEFAULT_MODEL (gotcha #5)', async () => {
