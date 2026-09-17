@@ -14,7 +14,8 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 | `config/infrastructure.ts` | **Composition root only**: calls the builders below, returns `{ storage, vectors, observability?, pubsub?, auth?, mcpClient?, services[] }`. New services get their own module + one call here |
 | `config/storage.ts` | `buildStorage()`: consumes `resolveDbTarget()` — PostgreSQL (`DATABASE_URL`) → LibSQL custom (`LIBSQL_URL`) → `file:./mastra.db` fallback |
 | `config/db.ts` | `AppDatabase` factory + `resolveDbTarget()` — the ONE URL-precedence implementation shared by storage and domain-owned app tables (ADR-008) |
-| `config/vectors.ts` | `buildVectors()` (PgVector/LibSQLVector following storage), `semanticRecallAvailable()`, `buildDomainMemory()` (DynamicArgument memory factory with latched one-warn embedder degrade — every domain agent uses it), `RECALL_OPTIONS` (ADR-006) |
+| `config/vectors.ts` | `buildVectors()` (PgVector/LibSQLVector following storage; latches recall OFF at boot when the fastembed cache is poisoned), `semanticRecallAvailable()`, `buildDomainMemory()` (DynamicArgument memory factory: one-shot readiness probe BEFORE Memory, latched one-warn embedder degrade — every domain agent uses it; `semanticRecall` turns on only with BOTH a resolved vector store and a usable embedder, since Mastra throws without the store), `RECALL_OPTIONS` (ADR-006) |
+| `config/fastembed-cache.ts` | On-disk fastembed cache geometry + health (`fastembedCacheReady`, `removeFastembedCacheArtifacts`): the package never re-extracts an existing model dir, so a partial download is permanent (gotcha #13). **No local imports** — consumed both by `vectors.ts` and by `scripts/warm-embeddings.ts` under `--experimental-strip-types` |
 | `config/pubsub.ts` | `buildPubsub()`: `REDIS_URL` → `RedisStreamsPubSub` (split workers + event-bus bridge); unset → undefined = in-process |
 | `config/auth.ts` | `buildAuth()`: `MASTRA_JWT_SECRET` → `MastraJwtAuth` (+`CompositeAuth` worker bearer via `MASTRA_WORKER_AUTH_TOKEN`); production without auth = FATAL exit; dev without = loud ⚠️ banner (ADR-004) |
 | `config/mcp-parse.ts` | **Pure (no @mastra/mcp, no logger — unit tier never loads the SDK):** `parseMcpServers` (Zod, `${VAR}` interpolation, reserved-key/transport rules, Scenario-2 fail-fast messages) + `defaultMcpApprovalPolicy`/`mcpWarnings` (spec 04) |
@@ -38,7 +39,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 
 | Directory | Purpose |
 |-----------|---------|
-| `config/` | `infrastructure.ts`, `storage.ts`, `db.ts`, `vectors.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `mcp-parse.ts`, `mcp.ts`, `schedules.ts`, `providers.ts`, `service-status.ts`, `model.ts`, `libsql-feedback-compat.ts` |
+| `config/` | `infrastructure.ts`, `storage.ts`, `db.ts`, `vectors.ts`, `fastembed-cache.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `mcp-parse.ts`, `mcp.ts`, `schedules.ts`, `providers.ts`, `service-status.ts`, `model.ts`, `libsql-feedback-compat.ts` |
 | `processors/` | `scope-guard.ts` — the scope-enforcement engine; `security-stack.ts` — the defense-in-depth pipeline composition (spec 06) |
 | `agents/` | `scoped-instructions.ts` — instruction template paired with the guard; `build-agent.ts` — `buildDomainAgent()` helper for creating agents with security stack + memory defaults |
 | `events/` | `event-bus.ts` (+ cross-process bridge) + `create-event.ts` (`createEvent` + `makeEvent` helpers for domain events) + barrel re-export |

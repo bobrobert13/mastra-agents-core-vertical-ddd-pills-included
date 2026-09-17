@@ -28,6 +28,7 @@
     "seed:eval-datasets": "node --experimental-strip-types scripts/seed-eval-datasets.ts",
     "seed:evals": "node --experimental-strip-types scripts/seed-eval-datasets.ts",
     "health-check": "bash scripts/health-check.sh",
+    "warm:embeddings": "node --env-file-if-exists=.env --experimental-strip-types scripts/warm-embeddings.ts",
     "init": "bash scripts/init.sh",
     "update": "bash scripts/update-mastra.sh",
     "deploy:staging": "mastra deploy --env staging --yes",

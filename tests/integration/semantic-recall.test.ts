@@ -91,6 +91,10 @@ describe('Scenario 3 — cross-thread semantic recall (keyless)', () => {
     expect(factRecalled(result)).toBe(true);
   });
 
+  // Measured on CPU (2026-09-17): ~71s — the E5-large ONNX session build plus 46
+  // real embeddings dominates the 30s default. The case only runs with a warm
+  // cache (`npm run warm:embeddings`), so a red suite here means the cache is
+  // half-downloaded, not that recall is broken.
   it.skipIf(!embedderWarm)(
     'real fastembed multilingual-E5 (warm cache): paraphrased question retrieves the fact across threads',
     async () => {
@@ -98,6 +102,7 @@ describe('Scenario 3 — cross-thread semantic recall (keyless)', () => {
       expect(r.source).toBe('fastembed');
       const { result } = await runRecall(r.passage!);
       expect(factRecalled(result)).toBe(true);
-    }
+    },
+    180_000
   );
 });

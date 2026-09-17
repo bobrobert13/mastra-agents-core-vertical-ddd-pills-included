@@ -485,12 +485,16 @@ colon form, identical to the canonical string.
     silently SHARES one index and MIXes incompatible vectors — recall quality rots with no error. The knowledge
     workflow fail-fasts instead (Scenario 6). Remediation: pin `semanticRecall.indexName` (same-dim swaps then
     still mix — treat embedder changes as re-index events), or delete + re-embed on every embedder switch.
-  - **G4 (fastembed offline):** first embed downloads a multi-hundred-MB-to-GB ONNX tarball (exact size: measure
-    in the first PR) from `storage.googleapis.com/qdrant-fastembed`
+  - **G4 (fastembed offline):** first embed downloads the ONNX tarball — **measured 2026-09-17: 1.31 GB
+    compressed → `model.onnx_data` 2.24 GB** — from `storage.googleapis.com/qdrant-fastembed`
     into `~/.cache/mastra/fastembed-models`; offline + cold cache ⇒ recall degrades to off (banner line), the
-    process survives. Pre-warm with the `warmup()` export (`@mastra/fastembed` — its d.ts: "Pre-download
-    fastembed models without creating ONNX sessions. Call this before running tests in parallel to avoid
-    concurrent download races").
+    process survives. Pre-warm with **`npm run warm:embeddings`**: the `warmup()` export of
+    `@mastra/fastembed` only pre-downloads bge-small/base and does NOT cover the multilingual-E5 this repo
+    defaults to. **Poisoned cache (same incident):** `retrieveModel()` returns an existing model directory
+    untouched and only deletes the `.tar.gz` after a FULL extraction, so an interrupted download leaves a
+    directory without `model.onnx` that fails every embed and is never retried — `npm run warm:embeddings`
+    detects and repairs it, `buildVectors()` latches recall off at boot, and the `buildDomainMemory()`
+    readiness probe keeps the turn alive (ADR-006 amendment).
   - **G5 (recall needs keys to *answer*):** zero-key recall stores/recalls vectors fine but `generate()` still
     401s without a provider key (existing banner rule) — don't confuse the two degradations.
 

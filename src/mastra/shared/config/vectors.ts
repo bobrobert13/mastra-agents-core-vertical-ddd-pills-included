@@ -6,6 +6,7 @@ import type { RequestContext } from '@mastra/core/request-context';
 import type { MastraEmbeddingModel } from '@mastra/core/vector';
 import type { SemanticRecall } from '@mastra/core/memory';
 import { logger } from '../logger';
+import { FASTEMBED_MODEL_FILE, fastembedCacheReady } from './fastembed-cache';
 import { resolveEmbedder, type EmbedderResolution } from './model';
 import type { ServiceRegistry } from './service-status';
 
@@ -64,11 +65,31 @@ export function __resetEmbedderHealthForTests(): void {
 }
 
 /**
+ * Test seam — replaces the on-disk fastembed cache check (never the
+ * availability flag itself), same DI spirit as `DomainMemoryDeps`.
+ */
+export interface VectorDeps {
+  fastembedCacheReady?: () => boolean;
+}
+
+/**
  * Build the vector store + push the 'Vector store', 'Semantic recall' and
  * 'Knowledge RAG' ServiceStatus lines in EVERY branch (shared/AGENTS.md).
  */
-export function buildVectors(services: ServiceRegistry): VectorResolution {
+export function buildVectors(services: ServiceRegistry, deps: VectorDeps = {}): VectorResolution {
   const resolution = resolveEmbedder();
+
+  // Boot-knowable after all: fastembed builds its ONNX session lazily, but the
+  // artifacts it needs are plain files. A poisoned cache (model dir present,
+  // `model.onnx` absent — an interrupted download/extraction is never retried by
+  // the package) would otherwise only surface inside the first chat turn. Latch
+  // it here so the banner tells the truth from boot (gotcha #13).
+  if (resolution.source === 'fastembed' && !(deps.fastembedCacheReady ?? fastembedCacheReady)()) {
+    markEmbedderUnavailable(
+      `fastembed model not cached at ${FASTEMBED_MODEL_FILE} — run \`npm run warm:embeddings\``
+    );
+  }
+
   const databaseUrl = process.env.DATABASE_URL;
 
   if (databaseUrl && databaseUrl.startsWith('postgres')) {
@@ -189,6 +210,34 @@ function guardEmbedder(model: MastraEmbeddingModel<string>): MastraEmbeddingMode
 }
 
 /**
+ * One-shot async readiness probe, run BEFORE Memory is constructed.
+ *
+ * Mastra resolves the embedder's dimension INSIDE the turn
+ * (`Memory.getInputProcessors` → `getEmbeddingDimension` → `embedder.doEmbed`),
+ * so a broken embedder used to 500 the in-flight request even though the latch
+ * had already warned. Probing here absorbs the failure: the latch flips (one
+ * canonical warn), this Memory is built with recall OFF, and the turn continues
+ * on plain history — the ADR-006 "never a crash" contract.
+ *
+ * Memoized once per process: zero cost after the first turn (fastembed also
+ * memoizes the ONNX session it builds).
+ */
+let readinessProbe: Promise<void> | undefined;
+
+async function ensureEmbedderReady(guarded: MastraEmbeddingModel<string>): Promise<void> {
+  if (!semanticRecallAvailable()) return;
+  readinessProbe ??= (async () => {
+    try {
+      await guarded.doEmbed({ values: ['ping'] });
+    } catch {
+      // guardEmbedder already latched + warned. Swallowed ON PURPOSE: the
+      // failure must degrade the turn, never end it.
+    }
+  })();
+  await readinessProbe;
+}
+
+/**
  * AgentConfig.memory DynamicArgument factory: Memory is built AFTER the
  * Mastra instance exists, so recall availability is evaluated per-request.
  *
@@ -206,18 +255,37 @@ export function buildDomainMemory(
   deps?: DomainMemoryDeps
 ): (ctx: { requestContext: RequestContext; mastra?: Mastra }) => Promise<Memory> {
   return async ({ mastra }) => {
+    // Recall already off (kill-switch or an earlier failure): nothing to probe
+    // and nothing to attach — and resolveEmbedder() stays out of the per-turn
+    // path, so its off-reason warn does not repeat on every request.
+    const requested = semanticRecallAvailable()
+      ? (deps?.embedder ?? resolveEmbedder().passage)
+      : undefined;
+
+    if (requested) await ensureEmbedderReady(guardEmbedder(requested));
+
+    // Re-read AFTER the probe: the probe above is the only thing that can flip
+    // availability inside this call.
     const available = semanticRecallAvailable();
-    const embedder = deps?.embedder ?? resolveEmbedder().passage;
     const vector = available
       ? (deps?.vector ?? mastra?.listVectors?.()?.[VECTOR_STORE_NAME])
       : undefined;
 
+    // Mastra HARD-THROWS on `semanticRecall` without a vector store ("Semantic
+    // recall requires a vector store to be configured") — and the registry read
+    // can legitimately come back empty: a standalone agent (tests, scripts, the
+    // stdio MCP surface) has no Mastra instance, and the ctor skips null vector
+    // entries. Recall needs BOTH halves, so the single decision below is also
+    // the guard: no usable embedder or no store ⇒ plain history, never a throw.
+    const recallEmbedder =
+      available && requested && vector !== undefined ? guardEmbedder(requested) : undefined;
+
     return new Memory({
       ...(vector ? { vector } : {}),
-      ...(embedder ? { embedder: guardEmbedder(embedder) } : {}),
+      ...(recallEmbedder ? { embedder: recallEmbedder } : {}),
       options: {
         lastMessages: 10,
-        semanticRecall: available ? RECALL_OPTIONS : false,
+        semanticRecall: recallEmbedder ? RECALL_OPTIONS : false,
         ...options,
       },
     });

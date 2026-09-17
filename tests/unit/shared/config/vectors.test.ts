@@ -83,10 +83,15 @@ describe('buildVectors — store resolution mirrors storage.ts', () => {
 });
 
 describe('banner lines — canonical strings (§3.9), both branches', () => {
-  it('recall ON (local E5): exact active lines + Knowledge RAG', async () => {
+  // The fastembed disk check is a seam: unit cases must not depend on whether
+  // this machine's ~/.cache is warm (gotcha #13).
+  const warmCache = { fastembedCacheReady: () => true };
+  const poisonedCache = { fastembedCacheReady: () => false };
+
+  it('recall ON (local E5, warm cache): exact active lines + Knowledge RAG', async () => {
     const { buildVectors } = await freshVectors();
     const services: ServiceStatus[] = [];
-    buildVectors(services);
+    buildVectors(services, warmCache);
 
     const recall = byName(services, 'Semantic recall')!;
     expect(render(recall)).toBe(
@@ -96,6 +101,37 @@ describe('banner lines — canonical strings (§3.9), both branches', () => {
     expect(render(rag)).toBe(
       '✅ Knowledge RAG    workflow index-knowledge + tool search_knowledge'
     );
+  });
+
+  it('poisoned fastembed cache (dir present, model.onnx absent) → off at BOOT + repair hint (gotcha #13)', async () => {
+    const v = await freshVectors();
+    const warn = vi.spyOn(v.logger, 'warn').mockImplementation(() => {});
+    const services: ServiceStatus[] = [];
+    v.buildVectors(services, poisonedCache);
+
+    // The honest banner: recall cannot be promised, so it is never promised.
+    expect(render(byName(services, 'Semantic recall')!)).toBe('○ Semantic recall  off (no embedder)');
+    expect(byName(services, 'Knowledge RAG')!.detail).toBe('off (no embedder)');
+    expect(v.semanticRecallAvailable()).toBe(false);
+
+    // Reason is actionable and carries the missing artifact + the repair command.
+    const canonicalWarns = warn.mock.calls.filter(call =>
+      String(call[0]).startsWith('Semantic recall: off (no embedder)')
+    );
+    expect(canonicalWarns).toHaveLength(1);
+    expect(String(canonicalWarns[0][0])).toContain('model.onnx');
+    expect(String(canonicalWarns[0][0])).toContain('npm run warm:embeddings');
+  });
+
+  it('the disk check gates FASTEMBED only — a hosted embedder is unaffected', async () => {
+    process.env.EMBEDDING_MODEL = 'openai/text-embedding-3-small';
+    process.env.OPENAI_API_KEY = 'test-key';
+    const v = await freshVectors();
+    const services: ServiceStatus[] = [];
+    v.buildVectors(services, poisonedCache);
+
+    expect(byName(services, 'Semantic recall')!.active).toBe(true);
+    expect(v.semanticRecallAvailable()).toBe(true);
   });
 
   it('hosted embedder without its key → canonical off lines (Scenario 4a)', async () => {
@@ -263,5 +299,34 @@ describe('buildDomainMemory — §3.3 factory (identity vs availability fix)', (
       mastra: { listVectors: () => undefined } as never,
     });
     expect(memory).toBeDefined();
+  });
+
+  it('a BROKEN embedder degrades AT BUILD TIME: Memory still builds, recall latches off (ADR-006)', async () => {
+    const v = await freshVectors();
+    const { createThrowingEmbedder } = await import('../../../helpers/deterministic-embedder');
+    const { LibSQLVector } = await import('@mastra/libsql');
+    const vector = new LibSQLVector({ id: 'broken', url: 'file::memory:' });
+
+    const broken = createThrowingEmbedder();
+    // Before the fix this handed Memory an embedder that Mastra probes INSIDE the
+    // turn (getEmbeddingDimension), so the whole request 500ed.
+    const memory = await v.buildDomainMemory(
+      { generateTitle: true },
+      { embedder: broken.model, vector }
+    )({ requestContext: {} as never });
+
+    expect(memory).toBeDefined();
+    expect(broken.calls).toBe(1); // exactly one probe — no retry storm
+    expect(v.semanticRecallAvailable()).toBe(false);
+    // Degraded Memory: no vector attached, plain history only.
+    expect((memory as unknown as { vector?: unknown }).vector).toBeUndefined();
+
+    // Next request does not even attempt the embedder again.
+    const nextBroken = createThrowingEmbedder();
+    await v.buildDomainMemory(
+      { generateTitle: true },
+      { embedder: nextBroken.model, vector }
+    )({ requestContext: {} as never });
+    expect(nextBroken.calls).toBe(0);
   });
 });
