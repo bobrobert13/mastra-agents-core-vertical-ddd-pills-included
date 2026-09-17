@@ -1,4 +1,5 @@
 import type { ServiceRegistry } from './service-status';
+import type { ScopeGuardTone } from '../processors/scope-messaging';
 
 const PROVIDER_ENV_KEYS: Array<[displayName: string, envKey: string]> = [
   ['DeepInfra', 'DEEPINFRA_API_KEY'],
@@ -46,6 +47,23 @@ export function readScopeGuardMode(env: NodeJS.ProcessEnv = process.env): ScopeG
   return (env.SCOPE_GUARD_MODE ?? '').trim().toLowerCase() === 'block' ? 'block' : 'redirect';
 }
 
+/** Los tres registros de voz que admite la negativa del scope guard. */
+export const SCOPE_GUARD_TONES = ['warm', 'formal', 'neutral'] as const;
+
+/**
+ * Tono de la negativa del scope guard (env `SCOPE_GUARD_TONE`). Default `warm`;
+ * un valor vacío o desconocido también cae a `warm` — mismo espíritu que
+ * `readScopeGuardMode`. El tipo se importa desde `scope-messaging` (que NO
+ * importa de aquí: sin ciclo). Un dominio puede además declararlo en su
+ * `scope.refusal.tone`, que prevalece sobre esta variable.
+ */
+export function readScopeGuardTone(env: NodeJS.ProcessEnv = process.env): ScopeGuardTone {
+  const value = (env.SCOPE_GUARD_TONE ?? '').trim().toLowerCase();
+  return (SCOPE_GUARD_TONES as readonly string[]).includes(value)
+    ? (value as ScopeGuardTone)
+    : 'warm';
+}
+
 /** Scope-guard status: on by default, needs a provider key to classify. */
 export function detectScopeGuard(services: ServiceRegistry, hasProviderKeys: boolean): void {
   if (process.env.SCOPE_GUARD === 'off') {
@@ -62,8 +80,8 @@ export function detectScopeGuard(services: ServiceRegistry, hasProviderKeys: boo
     active: hasProviderKeys,
     detail: hasProviderKeys
       ? readScopeGuardMode() === 'block'
-        ? 'active (out-of-scope input → blocked with a notice)'
-        : 'active (out-of-scope input → the agent answers the refusal)'
+        ? `active (out-of-scope input → blocked with a notice, tone: ${readScopeGuardTone()})`
+        : `active (out-of-scope input → the agent answers the refusal, tone: ${readScopeGuardTone()})`
       : 'inert without a provider key (fails open)',
   });
 }

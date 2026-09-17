@@ -30,6 +30,15 @@ describe('scopedInstructions', () => {
     expect(result).toContain('Other Agent: other work');
   });
 
+  it('frames the sibling list as context, not a script to recite (phase 3)', () => {
+    expect(result).toContain('never recite this list');
+    expect(result).toContain('at most one');
+    // the refusal protocol asks for ONE natural sentence, not a paragraph
+    expect(result).toContain('ONE short sentence, natural and warm');
+    expect(result).toContain('no paragraph, no list');
+    expect(result).toContain('name no one');
+  });
+
   it('keeps the original capabilities body', () => {
     expect(result).toContain('ORIGINAL CAPABILITIES BODY');
     // body comes after the boundary blocks

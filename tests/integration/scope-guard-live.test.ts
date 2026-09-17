@@ -57,9 +57,14 @@ describe.skipIf(!hasProviderKey)('scope guard live enforcement', () => {
     // El flujo no se corta: hay respuesta del agente y no hay tripwire.
     expect(result.tripwire).toBeUndefined();
     expect(result.text.trim().length).toBeGreaterThan(0);
-    // La instrucción de redirección nombra al hermano correcto y el modelo lo sigue
-    // (la pregunta original nunca llega al modelo: se reemplazó su texto).
-    expect(result.text).toMatch(/Research Agent|investigaci/i);
+    // La alternativa concreta ya NO está garantizada: el catálogo de hermanos
+    // dejó de inyectarse en la nota (fase 3), así que solo exigimos una negativa
+    // breve y natural — una frase, sin volcar la lista de agentes.
+    expect(result.text.length).toBeLessThan(400);
+    const named = ['Research Agent', 'Task Management Agent', 'Communication Agent'].filter(name =>
+      result.text.includes(name)
+    );
+    expect(named.length).toBeLessThanOrEqual(1);
   }, 120_000);
 
   it.each(['hola', '¿qué puedes hacer?'])(
@@ -78,6 +83,8 @@ describe.skipIf(!hasProviderKey)('scope guard live enforcement', () => {
 
     expect(result.tripwire).toBeUndefined();
     expect(result.text.trim().length).toBeGreaterThan(0);
-    expect(result.text).toMatch(/Task Management Agent|tareas/i);
+    // Igual que arriba: sin el catálogo en la nota, la alternativa concreta no se
+    // garantiza — pedimos una negativa breve (fase 3), no el nombre del hermano.
+    expect(result.text.length).toBeLessThan(400);
   }, 120_000);
 });

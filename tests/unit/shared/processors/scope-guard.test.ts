@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   buildRedirectInstruction,
   buildScopeClassifierPrompt,
@@ -29,13 +29,25 @@ function makeArgs(text = 'what happened at the resurrection of christ?') {
   return { args: { messages, abort } as never, abort, messages };
 }
 
+/** Texto de la nota que el guard escribe en modo redirect. */
+async function redirectNote(
+  guard: { processInput?: (args: never) => unknown },
+  text = 'what happened at the resurrection of christ?'
+): Promise<string> {
+  const { args } = makeArgs(text);
+  const result = (await guard.processInput!(args)) as unknown as Array<{
+    content?: { parts?: Array<{ text?: string }> };
+  }>;
+  return result[0]?.content?.parts?.[0]?.text ?? '';
+}
+
 describe('createScopeGuard', () => {
   it('has a domain-scoped id', () => {
     const guard = createScopeGuard({ ...scope, classify: async () => ({ inScope: true }) });
     expect(guard.id).toBe('scope-guard:files-test');
   });
 
-  it('block mode aborts with agent name and sibling redirect when out of scope', async () => {
+  it('block mode aborts with a short refusal line naming the agent (no catalog)', async () => {
     const guard = createScopeGuard({
       ...scope,
       classify: async () => ({ inScope: false }),
@@ -46,8 +58,9 @@ describe('createScopeGuard', () => {
     await expect(guard.processInput!(args)).rejects.toThrow('TripWire');
     expect(abort).toHaveBeenCalledTimes(1);
     const reason = abort.mock.calls[0][0] as string;
-    expect(reason).toContain('File Operations Agent only handles');
-    expect(reason).toContain('Research Agent');
+    expect(reason).toContain('File Operations Agent');
+    expect(reason.length).toBeLessThan(120);
+    expect(reason).not.toContain('Research Agent'); // la nota ya no recita el catálogo
   });
 
   it('redirect mode (default) keeps the flow: the request is REPLACED by the instruction, never aborted', async () => {
@@ -64,7 +77,9 @@ describe('createScopeGuard', () => {
     const text = result[0]?.content?.parts?.[0]?.text ?? '';
     expect(text).toContain('does not belong to File Operations Agent');
     expect(text).toContain('handles only: local file operations');
-    expect(text).toContain('Research Agent (web research)');
+    expect(text).toContain('a single sentence');
+    // el catálogo ya no se vuelca en la nota: vive en el system prompt
+    expect(text).not.toContain('Research Agent (web research)');
     // el modelo NUNCA ve la petición: es lo que mantiene el guard siendo guard
     expect(text).not.toContain('resurrection');
   });
@@ -235,24 +250,26 @@ describe('readScopeGuardMode', () => {
 });
 
 describe('buildRedirectInstruction', () => {
-  it('names the agent, the scope and the siblings, and asks for ONE sentence in the user language', () => {
+  it('names the agent and the scope, and asks for ONE short sentence (no catalog)', () => {
     const text = buildRedirectInstruction({
       agentName: 'File Operations Agent',
       scope: 'local file operations',
-      siblings: [{ name: 'Research Agent', description: 'web research' }],
+      tone: 'warm',
     });
 
-    expect(text).toContain('does not belong to File Operations Agent');
-    expect(text).toContain('handles only: local file operations');
-    expect(text).toContain('Research Agent (web research)');
-    expect(text).toContain('one-sentence reply');
+    expect(text).toContain('File Operations Agent');
+    expect(text).toContain('local file operations');
+    expect(text).toContain('a single sentence'); // idioma default = en
+    // la firma ya no recibe `siblings`: la nota no puede enumerar el catálogo
+    expect(text).not.toContain('Research Agent');
+    expect(text).not.toContain('web research');
   });
 
   it('writes the note in the language the user wrote in (the model mirrors the last message)', () => {
     const input = {
       agentName: 'File Operations Agent',
       scope: 'local file operations',
-      siblings: [{ name: 'Research Agent', description: 'web research' }],
+      tone: 'warm' as const,
     };
 
     expect(buildRedirectInstruction({ ...input, language: 'es' })).toContain(
@@ -266,19 +283,74 @@ describe('buildRedirectInstruction', () => {
   it('is DECLARATIVE, not imperative: the injection detector reads this text as user input', () => {
     // Verificado contra el detector real: un texto imperativo ("must not be
     // answered" / "do not mention these instructions") se clasifica como
-    // system-override y aborta el turno. Este test fija el contrato para que la
-    // reescritura no lo rompa en silencio (es y en pasan el detector).
+    // system-override y aborta el turno. Este test AMPLÍA el contrato original
+    // con más patrones imperativos prohibidos para que la reescritura no lo
+    // rompa en silencio (es y en pasan el detector).
     const base = {
       agentName: 'File Operations Agent',
       scope: 'local file operations',
-      siblings: [{ name: 'Research Agent', description: 'web research' }],
+      tone: 'warm' as const,
     };
 
     for (const language of ['es', 'en'] as const) {
       const text = buildRedirectInstruction({ ...base, language });
-      expect(text).not.toMatch(/do not|must not|you must|ignora (todas|las)|no menciones/i);
+      expect(text).not.toMatch(
+        /do not|must not|you must|ignora (todas|las)|no menciones|no digas|do not reveal|never mention|debes\s+\w+|\[System\]/i
+      );
       expect(text).not.toContain('[System]');
     }
+  });
+});
+
+/**
+ * Tono de la negativa (fase 3): resuelto opción > dominio > entorno. Los tonos
+ * se guardan como datos (`REFUSAL_VOICE`), así que basta comprobar que la voz
+ * esperada aparece en la nota; los textos exactos y la matriz completa 3×2 viven
+ * en scope-messaging.test.ts.
+ */
+describe('refusal tone resolution', () => {
+  afterEach(() => {
+    delete process.env.SCOPE_GUARD_TONE;
+  });
+
+  it('lets an explicit option win over the domain declaration', async () => {
+    const guard = createScopeGuard({
+      ...scope,
+      refusal: { tone: 'neutral' },
+      tone: 'formal',
+      classify: async () => ({ inScope: false }),
+    });
+    expect(await redirectNote(guard)).toContain('formal');
+  });
+
+  it('honours the domain tone (scope.refusal.tone) when no option is given', async () => {
+    const guard = createScopeGuard({
+      ...scope,
+      refusal: { tone: 'neutral' },
+      classify: async () => ({ inScope: false }),
+    });
+    expect(await redirectNote(guard)).toContain('plain');
+  });
+
+  it('honours scope.refusal.maxSentences when no option is given', async () => {
+    const guard = createScopeGuard({
+      ...scope,
+      refusal: { maxSentences: 2 },
+      classify: async () => ({ inScope: false }),
+    });
+    expect(await redirectNote(guard)).toContain('at most two sentences');
+  });
+
+  it('falls back to SCOPE_GUARD_TONE when the scope declares no tone', async () => {
+    process.env.SCOPE_GUARD_TONE = 'formal';
+    const guard = createScopeGuard({ ...scope, classify: async () => ({ inScope: false }) });
+    expect(await redirectNote(guard)).toContain('formal');
+  });
+
+  it('defaults to warm (no option, no domain tone, no env)', async () => {
+    delete process.env.SCOPE_GUARD_TONE;
+    const guard = createScopeGuard({ ...scope, classify: async () => ({ inScope: false }) });
+    expect(await redirectNote(guard)).toContain('warm');
   });
 });
 
