@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Cross-domain utilities kept deliberately minimal, one responsibility per module: service-status contract + banner, storage selection, observability config, provider detection, model resolution, logging, event bus, tool-execution helper. Everything here is used by ≥2 domains or by `src/mastra/index.ts`.
+Cross-domain utilities kept deliberately minimal, one responsibility per module: service-status contract + banner, storage selection, observability config, provider detection, model resolution, logging, event bus, tool-execution helper, and the general error/result bases every domain extends. Everything here is used by ≥2 domains or by `src/mastra/index.ts`.
 
 ## Key Files
 
@@ -50,6 +50,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 | `agents/` | `scoped-instructions.ts` — instruction template paired with the guard; `build-agent.ts` — `buildDomainAgent()` helper for creating agents with security stack + memory defaults; `connectors.ts` — declarative `rag`/`memory`/`mcp` connectors; `domain-catalog.ts` — the single domain table + `siblingsOf()` |
 | `observability/` | `request-trace.ts` — per-request chat pipeline trace (terminal diagnostics) |
 | `events/` | `event-bus.ts` (+ cross-process bridge) + `create-event.ts` (`createEvent` + `makeEvent` helpers for domain events) + barrel re-export |
+| `handlers/` | `app-error.ts` (`AppError` — the general error base every domain extends: abstract `code`/`domain`, semantic `kind`, optional `details`/`cause`, `toJSON()`, plus `isPersistenceUnavailable` + `toAppError` normalizers) and `app-result.ts` (`AppResult` — the general Result base: `AppResult.ok`/`fail`, `unwrap`/`unwrapOr`/`map`/`match`, `isOk`/`isFail` guards) + barrel |
 | `tools/` | `run-tool.ts`, `workspace-path.ts` |
 
 ## For AI Agents
@@ -59,6 +60,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 - Every module here must have exactly one reason to change (the 2026-09-12 split of the 175-line `infrastructure.ts` is the reference example).
 - `./mastra.db` (LibSQL fallback) is created at process CWD; in dev bundles that is `src/mastra/public/` — all `*.db*` are gitignored.
 - Nothing in `shared/` may import from `domains/`.
+- **Domain errors/results**: `handlers/` holds only the GENERAL bases. A domain's concrete errors derive from `AppError` in its own `domains/<d>/handlers/errors.ts`, and its results are `AppResult<T, <ThatDomain>Error>` — never add a domain-named error here.
 
 ### Testing Requirements
 - `tests/unit/shared/event-bus.test.ts` covers the bus; `tests/smoke/boots.test.ts` covers the whole config composition via `src/mastra/index.ts`. Any change to a config module must be verified by booting with and without its env vars (`timeout 15 npm run dev`).
