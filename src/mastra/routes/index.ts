@@ -7,6 +7,7 @@ import { healthVersionRoute } from './health';
 import { webhookRoute } from './webhook';
 import { createRateLimiter, readRateLimitConfig } from './middleware/rate-limit';
 import { requestContextPopulator } from './middleware/request-context';
+import { requestTrace } from './middleware/request-trace';
 
 export { webhookRoute } from './webhook';
 export { healthVersionRoute } from './health';
@@ -73,7 +74,8 @@ export function buildServerSurface(services: ServiceRegistry): ServerSurface {
   // ── Rate limiting (GLOBAL middleware ⇒ authed routes only; public routes
   //    carry their own instance — skipIfFrameworkPublic, spec §3.3) ──────
   const rate = readRateLimitConfig();
-  const middleware: Middleware[] = [requestContextPopulator];
+  // requestTrace FIRST: mide el request completo (entrada → cierre del stream).
+  const middleware: Middleware[] = [requestTrace, requestContextPopulator];
   if (rate.enabled) {
     middleware.push(createRateLimiter());
     services.push({

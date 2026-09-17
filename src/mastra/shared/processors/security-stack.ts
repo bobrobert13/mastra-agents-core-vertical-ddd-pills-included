@@ -35,6 +35,7 @@ import { hasAnyProviderKey } from '../config/providers';
 import { guardModel } from '../config/model';
 import type { ServiceRegistry } from '../config/service-status';
 import { logger } from '../logger';
+import { tracedProcessor } from '../observability/request-trace';
 import { createScopeGuard, type DomainScope } from './scope-guard';
 
 export type SecurityMode = 'active' | 'log' | 'off';
@@ -276,7 +277,12 @@ export function buildSecurityStack(input: SecurityStackInput): SecurityStack {
     );
   }
 
-  return { inputProcessors, outputProcessors };
+  // Timing por etapa (traza de chat, sólo con CHAT_TRACE activo): el Proxy es
+  // transparente — `id`, opciones e `instanceof` siguen siendo los del original.
+  return {
+    inputProcessors: inputProcessors.map(p => tracedProcessor(p)),
+    outputProcessors: outputProcessors.map(p => tracedProcessor(p)),
+  };
 }
 
 /**

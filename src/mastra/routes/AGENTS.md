@@ -22,6 +22,7 @@ object literal: `mastra dev` statically extracts it).
 | `middleware/webhook-signature.ts` | `computeSignature`/`verifySignature` (`timingSafeEqual`) + fail-closed `requireSignedRequest()` (unset secret ⇒ identical 401) |
 | `middleware/rate-limit.ts` | in-memory FIXED-window limiter; both env vars required together; XFF first hop (spoofable without trusted-proxy) |
 | `middleware/request-context.ts` | global `requestContextPopulator`: maps Spec 01 `user.id` → `MASTRA_RESOURCE_ID_KEY` (bare id) |
+| `middleware/request-trace.ts` | global `requestTrace` (FIRST in the array): one-line-per-event pipeline trace of `/chat/:agentId` — entry (`msgs=`, `thread=` read from a body CLONE), TTFB (when the handler returned the `Response`: the end of the guardrail prelude), first byte and close/cancel with byte count; the short id goes back as `x-mastra-trace`. Dev diagnostics: on outside production, `CHAT_TRACE=on|off` overrides. Non-chat routes are untouched |
 
 ## For AI Agents
 

@@ -11,6 +11,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 | File | Description |
 |------|-------------|
 | `logger.ts` | Level-filtered logger (`LOG_LEVEL` env) wrapping console; the `no-console` lint rule is satisfied by its single eslint-disable. Use `logger.debug/info/warn/error/raw` everywhere else |
+| `observability/request-trace.ts` | `AsyncLocalStorage` chat-trace context (`openChatTrace`/`runWithChatTrace`/`currentChatTrace`) + `tracedProcessor()` (transparent Proxy that times `process*` methods — identity, options and `instanceof` preserved; per-chunk `processOutputStream` records ms without logging each call) + one-line formatting. Default ON outside production, `CHAT_TRACE=on|off` overrides; no trace active ⇒ zero overhead |
 | `config/infrastructure.ts` | **Composition root only**: calls the builders below, returns `{ storage, vectors, observability?, pubsub?, auth?, mcpClient?, services[] }`. New services get their own module + one call here |
 | `config/storage.ts` | `buildStorage()`: consumes `resolveDbTarget()` — PostgreSQL (`DATABASE_URL`) → LibSQL custom (`LIBSQL_URL`) → `file:./mastra.db` fallback |
 | `config/db.ts` | `AppDatabase` factory + `resolveDbTarget()` — the ONE URL-precedence implementation shared by storage and domain-owned app tables (ADR-008) |
@@ -42,6 +43,7 @@ Cross-domain utilities kept deliberately minimal, one responsibility per module:
 | `config/` | `infrastructure.ts`, `storage.ts`, `db.ts`, `vectors.ts`, `fastembed-cache.ts`, `observability.ts`, `pubsub.ts`, `auth.ts`, `mcp-parse.ts`, `mcp.ts`, `schedules.ts`, `providers.ts`, `service-status.ts`, `model.ts`, `libsql-feedback-compat.ts` |
 | `processors/` | `scope-guard.ts` — the scope-enforcement engine; `security-stack.ts` — the defense-in-depth pipeline composition (spec 06) |
 | `agents/` | `scoped-instructions.ts` — instruction template paired with the guard; `build-agent.ts` — `buildDomainAgent()` helper for creating agents with security stack + memory defaults |
+| `observability/` | `request-trace.ts` — per-request chat pipeline trace (terminal diagnostics) |
 | `events/` | `event-bus.ts` (+ cross-process bridge) + `create-event.ts` (`createEvent` + `makeEvent` helpers for domain events) + barrel re-export |
 | `tools/` | `run-tool.ts`, `workspace-path.ts` |
 
