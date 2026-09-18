@@ -47,6 +47,22 @@ export function readScopeGuardMode(env: NodeJS.ProcessEnv = process.env): ScopeG
   return (env.SCOPE_GUARD_MODE ?? '').trim().toLowerCase() === 'block' ? 'block' : 'redirect';
 }
 
+/** Cómo responde el guard de inyección cuando el detector marca un mensaje. */
+export type InjectionGuardMode = 'graceful' | 'block';
+
+/**
+ * Modo del guard de inyección (env `INJECTION_GUARD_MODE`). Default `graceful`:
+ * el mensaje marcado se sustituye por una nota y el agente redacta la negativa
+ * — mismo principio que `SCOPE_GUARD_MODE=redirect` y la razón de ser del
+ * wrapper (2026-09-18: un TripWire del detector mataba el turno del chat).
+ * `block` restaura el corte duro del detector (TripWire antes del modelo).
+ */
+export function readInjectionGuardMode(env: NodeJS.ProcessEnv = process.env): InjectionGuardMode {
+  return (env.INJECTION_GUARD_MODE ?? '').trim().toLowerCase() === 'block'
+    ? 'block'
+    : 'graceful';
+}
+
 /** Los tres registros de voz que admite la negativa del scope guard. */
 export const SCOPE_GUARD_TONES = ['warm', 'formal', 'neutral'] as const;
 

@@ -37,7 +37,7 @@ export const webFetchTool = createTool({
       // content fetched during the current run is never rescanned). The
       // extracted text is checked BEFORE it enters the agentic loop as a tool
       // result. Inert without a provider key / with SECURITY_PROCESSORS=off
-      // (same rule as the stack's slot 2).
+      // (same inert rule as the injection slot).
       await scanToolOutputForInjection(page.content, url);
 
       return {

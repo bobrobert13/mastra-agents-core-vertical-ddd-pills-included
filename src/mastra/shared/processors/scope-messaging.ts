@@ -30,7 +30,7 @@ export const REFUSAL_VOICE: Record<ScopeGuardTone, { es: string; en: string }> =
 };
 
 /** Sentence-count phrasing ("one sentence" / "at most two") per tone language. */
-const SENTENCE_COUNT: Record<'es' | 'en', Record<1 | 2, string>> = {
+export const SENTENCE_COUNT: Record<'es' | 'en', Record<1 | 2, string>> = {
   es: { 1: 'una sola frase', 2: 'como mucho dos frases' },
   en: { 1: 'a single sentence', 2: 'at most two sentences' },
 };
@@ -62,8 +62,8 @@ export function detectMessageLanguage(text: string): 'es' | 'en' {
   return /[¿¡ñáéíóúü]/i.test(text) ? 'es' : 'en';
 }
 
-/** Clamp of `maxSentences`: default 1, never outside 1..2. */
-function normalizeMaxSentences(value?: number): 1 | 2 {
+/** Clamp of `maxSentences`: default 1, never outside 1..2. Shared with the injection note. */
+export function normalizeMaxSentences(value?: number): 1 | 2 {
   if (value === undefined || !Number.isFinite(value)) return 1;
   return Math.min(2, Math.max(1, Math.round(value))) as 1 | 2;
 }

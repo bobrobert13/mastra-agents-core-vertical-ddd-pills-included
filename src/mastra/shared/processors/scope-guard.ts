@@ -17,6 +17,11 @@ import {
   type ScopeClassifierPromptInput,
   type ScopeGuardTone,
 } from './scope-messaging';
+import {
+  extractLastUserText,
+  replaceClassifiedUserText,
+  type MessageLike,
+} from './message-text';
 
 // Re-exported so existing import paths (src/ and tests/) keep working after the
 // messaging split into `scope-messaging.ts`.
@@ -59,58 +64,6 @@ export interface ScopeGuardOptions extends DomainScope {
   tone?: ScopeGuardTone;
   /** Refusal length; default scope.refusal?.maxSentences ?? 1 (clamped 1..2). */
   maxSentences?: number;
-}
-
-interface MessageLike {
-  role?: string;
-  content?: { parts?: unknown[] };
-}
-
-/** Texto plano de un mensaje (sus partes de texto unidas); '' si no tiene. */
-function textOfMessage(message: MessageLike | undefined): string {
-  const parts = message?.content?.parts;
-  if (!Array.isArray(parts)) return '';
-  return parts
-    .filter(
-      (part): part is { type: string; text?: string } =>
-        typeof part === 'object' && part !== null && (part as { type?: string }).type === 'text'
-    )
-    .map(part => part.text ?? '')
-    .join(' ')
-    .trim();
-}
-
-/**
- * Índice del último mensaje de usuario **con texto**: es el que el clasificador
- * juzgó y, en modo redirect, el que se reemplaza.
- */
-function lastUserTextIndex(messages: MessageLike[]): number {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    if (messages[i]?.role !== 'user') continue;
-    if (textOfMessage(messages[i]) !== '') return i;
-  }
-  return -1;
-}
-
-function extractLastUserText(messages: MessageLike[]): string {
-  const index = lastUserTextIndex(messages);
-  return index === -1 ? '' : textOfMessage(messages[index]);
-}
-
-/**
- * Sustituye el texto del mensaje clasificado conservando id, rol y formato: el
- * pipeline sigue viendo el mismo mensaje, pero lo que el modelo lee es la
- * instrucción — nunca la petición fuera de alcance.
- */
-function replaceClassifiedUserText(messages: MessageLike[], text: string): MessageLike[] {
-  const index = lastUserTextIndex(messages);
-  if (index === -1) return messages;
-  const message = messages[index];
-  const content = message?.content;
-  if (content === undefined || content === null) return messages;
-  const clone = [...messages];
-  clone[index] = { ...message, content: { ...content, parts: [{ type: 'text', text }] } };
-  return clone;
 }
 
 /**
