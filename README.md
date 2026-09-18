@@ -70,7 +70,7 @@ flowchart TD
     end
 
     subgraph shared ["shared/ — cross-cutting only"]
-        STACK["processors/security-stack.ts<br/>guard → token-limit → injection → cache → PII"]
+        STACK["processors/security-stack.ts<br/>injection guard → token-limit → scope guard → cache → PII"]
         CONN["agents/connectors.ts + build-agent.ts<br/>memory · rag · mcp declaration → wiring"]
         BUS["events/event-bus.ts<br/>+ Redis cross-process bridge"]
         HAND["handlers/ — AppError / AppResult<br/>the typed failure contract"]
@@ -148,20 +148,19 @@ and the pattern in `domains/task-management/handlers`.)
 ```mermaid
 sequenceDiagram
     actor U as User/Client
-    participant SG as Scope guard (slot 0)
+    participant PID as Injection guard (slot 0, keyed)
     participant TL as TokenLimiter (1)
-    participant PID as InjectionDetector (2, keyed)
+    participant SG as Scope guard (2, the mutator)
     participant RC as ResponseCache (3)
     participant LLM as Model (+ tools)
     participant PII as PIIDetector (output)
 
-    U->>SG: prompt
+    U->>PID: prompt
+    PID->>TL: raw input scanned<br/>(flagged → toned refusal note, no TripWire)
+    TL->>SG: pruned to TOKEN_LIMIT
     SG->>SG: classify in/out (LLM, fail-open)
     Note over SG: out-of-scope → REDIRECT (default):<br/>the request text is swapped for a<br/>declarative note → the model composes<br/>a warm refusal. SCOPE_GUARD_MODE=block<br/>aborts with a TripWire before the model.
-    SG->>TL: in scope (or redirect note)
-    TL->>PID: pruned to TOKEN_LIMIT
-    PID--xU: injection → abort (hard-throw by design)
-    PID->>RC: last message only → clean
+    SG->>RC: in scope (or redirect note)
     RC-->>U: cache hit replays prior answer
     RC->>LLM: miss → model + tool loop
     Note over LLM: file writes / MCP mutations<br/>pause for human approval
@@ -169,10 +168,13 @@ sequenceDiagram
     PII-->>U: masked PII output
 ```
 
-Deterministic slots (1, 3 + the FS jail) work **without API keys**; the LLM classifiers (2, output) are
-inert — and clearly labeled in the banner — when no provider key exists. This asymmetry is deliberate:
-Mastra's built-in detectors _hard-throw_ on guard-model failure, so keyless users must never be routed
-through them ([ADR-009](docs/adr/009-guardrails-security-processor-pipeline.md)).
+Deterministic slots (1, 3 + the FS jail) work **without API keys**; the LLM classifiers (injection,
+scope, PII output) are inert — and clearly labeled in the banner — when no provider key exists. This
+asymmetry is deliberate: Mastra's built-in detectors _hard-throw_ on failure, so keyless users must
+never be routed through them ([ADR-009](docs/adr/009-guardrails-security-processor-pipeline.md)).
+**Order rule (2026-09-18):** raw-input scanners run BEFORE the one guard that mutates the message —
+the scope guard's redirect note must never be re-classified as if the user had written it
+([ADR-011](docs/adr/011-graceful-guard-conversions.md)).
 
 ### The chat endpoint is observable by default
 
@@ -182,11 +184,11 @@ _exactly_ where a slow or stuck turn is spending its time:
 
 ```text
 [chat 3f9c1a02] → POST /chat/comms msgs=1 thread=nuevo-9c1d
-[chat 3f9c1a02] · scope-guard:communication ok 1.25s
-[chat 3f9c1a02] · token-limiter ok 0.02s
 [chat 3f9c1a02] · prompt-injection-detector ok 1.80s
+[chat 3f9c1a02] · token-limiter ok 0.02s
+[chat 3f9c1a02] · scope-guard:communication ok 1.25s
 [chat 3f9c1a02] · mastra/response-cache ok 0.00s
-[chat 3f9c1a02] ← 200 ttfb=8.90s [scope-guard 1.25s, token-limiter 0.02s, …]
+[chat 3f9c1a02] ← 200 ttfb=8.90s [prompt-injection-detector 1.80s, token-limiter 0.02s, …]
 [chat 3f9c1a02] ✓ done 12.40s first-byte=9.12s bytes=1183 [ … ]
 ```
 
@@ -197,7 +199,7 @@ _exactly_ where a slow or stuck turn is spending its time:
   fields keep working, so structural tests and the pipeline itself are unaffected.
 - **How you use it:** ON outside production by default; `CHAT_TRACE=on|off` overrides. The short id travels back
   as the `x-mastra-trace` response header so a client can correlate a slow response with the server log.
-- **Why it exists:** the guardrail prelude (memory recall + scope classifier + injection scan) runs **before** the
+- **Why it exists:** the guardrail prelude (memory recall + injection scan + scope classifier) runs **before** the
   first token — measured at ~9–20 s with DeepInfra. Without a trace that latency is invisible; with it, it is a
   number you can act on. (Budget client connect timeouts ≥ 30 s — the fix is latency, never a shorter timeout.)
 
@@ -238,15 +240,15 @@ read-only `MCPServer`, `AppDatabase` factory, workspace jail, shared response ca
 
 ### Quality & ops tooling
 
-- **4 test tiers + gates**: smoke (zero-config boot of the real instance), unit (**444 tests**), cross-domain/HTTP/
+- **4 test tiers + gates**: smoke (zero-config boot of the real instance), unit (**460 tests**), cross-domain/HTTP/
   schedules integration, two-tier evals — all blocking in CI, with ratcheted coverage floors (see
   [Testing & CI](#-testing--ci)).
 - **CI**: 8 blocking jobs (`lint, typecheck, build, coverage, test-smoke, test-unit, test-integration, test-evals`)
   - a non-gating nightly [`evals-live.yml`](.github/workflows/evals-live.yml) for LLM-judge experiments.
 - **Docker**: dev compose (app + pgvector) + HA prod compose + chaos script (`tests/chaos/api-kill.sh`).
 - **Operator scripts**: `init`, `health-check`, `warm:embeddings`, `update` (bump all Mastra packages + re-run the gate).
-- **Docs**: 10 ADRs (`docs/adr/`), 8 phase specs + index (`docs/specs/`), gap analysis, testing guide,
-  18 hierarchical `AGENTS.md`, 25 gotchas in the root doc.
+- **Docs**: 11 ADRs (`docs/adr/`), 8 phase specs + index (`docs/specs/`), gap analysis, testing guide,
+  18 hierarchical `AGENTS.md`, 26 gotchas in the root doc.
 
 ## 🚀 Quick start
 
@@ -294,7 +296,7 @@ Environment: development
 ○ PubSub           in-process (EventEmitterPubSub) — split workers unavailable
 ✅ Auth             JWT (MASTRA_JWT_SECRET) — /api/* + Studio protected
 ○ MCP client       off — set MCP_SERVERS to connect external servers (see .env.example)
-✅ Guardrails       injection|pii|token-limit|cache active (block)
+✅ Guardrails       injection|pii|token-limit|cache active (graceful)
 ✅ CORS            allow-list: http://localhost:3000
 ✅ Rate limiting    100 req / 60000 ms fixed window per IP — in-process, per replica
 ○ Webhook signing  no WEBHOOK_SECRET — /hooks/* rejects 401
@@ -319,7 +321,7 @@ Every variable in [`.env.example`](.env.example) is **optional** and documented 
 | Auth            | `MASTRA_JWT_SECRET` · `AUTH_DISABLED` · `MASTRA_WORKER_AUTH_TOKEN` · `AUTH_PROVIDER` (doc-extension)                                                                                                | production without auth **refuses to boot**                                                                |
 | HA/workers      | `REDIS_URL` · `MASTRA_WORKERS` · `MASTRA_STEP_EXECUTION_URL`                                                                                                                                        | split topology needs Redis; exactly ONE scheduler                                                          |
 | MCP             | `MCP_SERVERS` (JSON) · `ENABLE_MCP_SERVER=true`                                                                                                                                                     | malformed JSON = actionable boot error                                                                     |
-| Guardrails      | `SECURITY_PROCESSORS` · `TOKEN_LIMIT` · `PI_THRESHOLD` · `RESPONSE_CACHE(_TTL)` · `COST_LIMIT_USD` · `REVIEW_APPROVAL=off` · `FILE_JAIL=off` · `WORKSPACE_ROOT`                                     | see [security model](#-security-model)                                                                     |
+| Guardrails      | `SECURITY_PROCESSORS` · `INJECTION_GUARD_MODE=graceful\|block` · `TOKEN_LIMIT` · `PI_THRESHOLD` · `RESPONSE_CACHE(_TTL)` · `COST_LIMIT_USD` · `REVIEW_APPROVAL=off` · `FILE_JAIL=off` · `WORKSPACE_ROOT`                | see [security model](#-security-model)                                                                     |
 | Evals           | `EVAL_STORAGE_URL` (throwaway; default `file:./eval-ci.db`) · `EVAL_ONLINE_SAMPLING_RATE` (default 0.1)                                                                                              | never the app DB (ADR-010); sampling applies to live runs only                                             |
 | Diagnostics     | `CHAT_TRACE=on\|off` (default ON outside production)                                                                                                                                                | per-request chat pipeline trace + `x-mastra-trace` header                                                  |
 | HTTP surface    | `CORS_ORIGIN` (CSV) · `RATE_LIMIT_WINDOW_MS`+`RATE_LIMIT_MAX_REQUESTS` · `WEBHOOK_SECRET`                                                                                                           | limiter/webhook caveats in gotchas #18-#19                                                                 |
@@ -340,9 +342,12 @@ Defense in depth, ordered, and each layer optional-but-explicit:
    restores the hard TripWire, `SCOPE_GUARD_TONE` / per-domain `refusal.tone` set the voice, and the classifier
    **fails open** (a broken classifier never takes the product down). Out-of-scope means a **substantive request owned
    by another domain** — greetings, thanks and "what can you do?" pass (the contract is `buildScopeClassifierPrompt()`,
-   provable offline).
-3. **Security stack (ADR-009)** — token budget → prompt-injection detector → response cache (input);
-   PII mask (output). Fail-closed classifiers, inert-without-key rule, mutating agents excluded from cache.
+   provable offline). **Order rule (ADR-011):** this guard is the LAST mutator and runs behind the raw-input injection
+   scanner, so nothing ever re-classifies the note it wrote.
+3. **Security stack (ADR-009, ADR-011)** — order rule: raw-input injection scanner FIRST (a detection becomes a
+   toned refusal — the payload never reaches the primary model — unless `INJECTION_GUARD_MODE=block` restores the hard
+   cut), then token budget → **scope guard last** (the only mutator) → response cache; PII mask (output). The web-fetch
+   tool-output scan stays fail-closed; inert-without-key rule; mutating agents excluded from cache.
    On providers without structured outputs (DeepInfra/DeepSeek) the detectors' instructions **name the schema keys
    literally**, so a model that would otherwise invent keys can no longer leave the detector inert while still paying
    the call (gotcha #23).
