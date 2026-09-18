@@ -25,9 +25,12 @@ import {
  * every domain exports a scope-guard whose id matches its domain, proving the
  * agent module wires one. The guard instance itself is unit-tested offline.
  *
- * Spec 06 extension: every domain ALSO exports its buildSecurityStack result
- * with the scope guard at slot 0 — proving the agent modules wire the full
- * defense-in-depth pipeline, not a bare guard array (root hard rule).
+ * Spec 06 extension, re-pointed 2026-09-18: every domain ALSO exports its
+ * buildSecurityStack result with the ORDER RULE baked in — the raw-input
+ * injection scanner runs BEFORE the scope guard, which is the last mutator
+ * (its redirect note must never be re-classified by a guard behind it). That
+ * proves the agent modules wire the full defense-in-depth pipeline, not a bare
+ * guard array (root hard rule).
  */
 describe('domain scope guards wiring', () => {
   const cases = [
@@ -51,8 +54,14 @@ describe('domain scope guards wiring', () => {
     ['communication', communicationSecurityStack],
   ] as const;
 
-  it.each(stacks)('%s security stack carries the scope guard at slot 0', (domain, stack) => {
-    expect(stack.inputProcessors[0]?.id).toBe(`scope-guard:${domain}`);
+  it.each(stacks)('%s security stack wires the scope guard behind the raw-input scanner', (domain, stack) => {
+    const ids = stack.inputProcessors.map(p => p.id);
+    expect(ids).toContain(`scope-guard:${domain}`);
+    // Order rule (2026-09-18): indexOf beats lastIndexOf(-1) when the injection
+    // slot is absent (keyless CI) and proves the order when it is mounted.
+    expect(ids.indexOf(`scope-guard:${domain}`)).toBeGreaterThan(
+      ids.lastIndexOf('prompt-injection-detector')
+    );
     expect(stack.inputProcessors.length).toBeGreaterThan(0);
   });
 

@@ -30,6 +30,12 @@ const hasProviderKey = [
  * (`SCOPE_GUARD_MODE=block` restores the hard cut; that path is covered
  * offline in tests/unit/shared/processors/scope-guard.test.ts).
  *
+ * Fourth regression (2026-09-18, guard ORDER): the scope guard's redirect note
+ * was then re-scanned by the injection detector (which ran AFTER it) and its
+ * classifier killed the turn with a TripWire on a perfectly harmless out-of-scope
+ * question. The order rule now puts raw-input scanners first and the scope guard
+ * last; the same-thread case below is the end-to-end guard for that incident.
+ *
  * The agent runs through a minimal Mastra harness: Memory needs the instance's
  * storage + vector store, and a bare domain agent has neither (the real
  * `/chat/:agentId` path always goes through the composition root).
@@ -87,4 +93,19 @@ describe.skipIf(!hasProviderKey)('scope guard live enforcement', () => {
     // garantiza — pedimos una negativa breve (fase 3), no el nombre del hermano.
     expect(result.text.length).toBeLessThan(400);
   }, 120_000);
+
+  it('incident 2026-09-18: greeting then out-of-scope in the SAME thread never trips the guards', async () => {
+    const thread = `incident-order-${Date.now()}`;
+
+    const greeting = await generate('hola', thread);
+    expect(greeting.tripwire).toBeUndefined();
+    expect(greeting.text.trim().length).toBeGreaterThan(0);
+
+    // La nota del redirect del scope guard la escribía ANTES el guard y la
+    // re-escaneaba el detector de inyección (que corría detrás) → TripWire.
+    const offTopic = await generate('¿qué pasó en la resurrección de Cristo?', thread);
+    expect(offTopic.tripwire).toBeUndefined();
+    expect(offTopic.text.trim().length).toBeGreaterThan(0);
+    expect(offTopic.text.length).toBeLessThan(400);
+  }, 180_000);
 });

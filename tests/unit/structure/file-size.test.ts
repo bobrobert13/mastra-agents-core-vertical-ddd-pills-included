@@ -32,7 +32,6 @@ const LEGACY_LARGE: Record<string, number> = {
   'shared/config/vectors.ts': 293,
   'shared/config/mcp-parse.ts': 269,
   'shared/evals/gate-runner.ts': 244,
-  'shared/processors/scope-guard.ts': 220,
   'shared/evals/scorers-registry.ts': 207,
   'shared/config/env.ts': 202,
 };

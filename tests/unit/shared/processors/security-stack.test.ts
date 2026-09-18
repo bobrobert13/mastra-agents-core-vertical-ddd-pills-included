@@ -15,7 +15,11 @@ import {
   securityMode,
   securityModel,
 } from '../../../../src/mastra/shared/processors/security-stack';
-import type { DomainScope } from '../../../../src/mastra/shared/processors/scope-guard';
+import { createInjectionGuard } from '../../../../src/mastra/shared/processors/injection-guard';
+import {
+  createScopeGuard,
+  type DomainScope,
+} from '../../../../src/mastra/shared/processors/scope-guard';
 
 const scope: DomainScope = {
   domain: 'unit-test',
@@ -35,6 +39,7 @@ const STACK_ENV = [
   'SECURITY_PROCESSORS',
   'SECURITY_MODEL',
   'PI_THRESHOLD',
+  'INJECTION_GUARD_MODE',
   'TOKEN_LIMIT',
   'RESPONSE_CACHE',
   'RESPONSE_CACHE_TTL',
@@ -101,24 +106,24 @@ describe('buildSecurityStack — composition order', () => {
     expect(stack.outputProcessors).toHaveLength(0);
   });
 
-  it('active + provider key ⇒ [guard, token-limiter, injection, cache] + [pii]', () => {
+  it('active + provider key ⇒ [injection, token-limiter, scope-guard, cache] + [pii] (order rule)', () => {
     setProviderKey();
     const stack = buildSecurityStack({ scope });
     expect(ids(stack.inputProcessors)).toEqual([
-      'scope-guard:unit-test',
-      'token-limiter',
       'prompt-injection-detector',
+      'token-limiter',
+      'scope-guard:unit-test',
       'mastra/response-cache',
     ]);
     expect(ids(stack.outputProcessors)).toEqual(['pii-detector']);
   });
 
-  it('INERT RULE: without a provider key the LLM detectors are absent (they hard-throw on guard-model failure)', () => {
+  it('INERT RULE: without a provider key the LLM detectors are absent (they hard-throw on failure)', () => {
     clearProviderKeys();
     const stack = buildSecurityStack({ scope });
     expect(ids(stack.inputProcessors)).toEqual([
-      'scope-guard:unit-test',
       'token-limiter',
+      'scope-guard:unit-test',
       'mastra/response-cache',
     ]);
     expect(stack.outputProcessors).toHaveLength(0);
@@ -130,11 +135,24 @@ describe('buildSecurityStack — composition order', () => {
     process.env.SECURITY_PROCESSORS = 'log';
     const stack = buildSecurityStack({ scope });
     const pid = stack.inputProcessors.find(p => p.id === 'prompt-injection-detector') as never as {
-      strategy: string;
+      detector: { strategy: string };
     };
     const pii = stack.outputProcessors[0] as never as { strategy: string };
-    expect(pid.strategy).toBe('warn');
+    expect(pid.detector.strategy).toBe('warn');
     expect(pii.strategy).toBe('warn');
+  });
+
+  it('the injection slot wraps the detector (graceful converter) and keeps lastMessageOnly: true', () => {
+    setProviderKey();
+    const stack = buildSecurityStack({ scope });
+    const slot = stack.inputProcessors[0] as never as {
+      id: string;
+      detector: { lastMessageOnly: boolean };
+    };
+    expect(slot.id).toBe('prompt-injection-detector');
+    // El wrapper sustituye el mensaje escaneado: con lastMessageOnly=false el
+    // marcado deja de ser determinista. Este test fija el acoplamiento.
+    expect(slot.detector.lastMessageOnly).toBe(true);
   });
 
   it('TokenLimiter honours TOKEN_LIMIT, default 8000', () => {
@@ -158,9 +176,9 @@ describe('buildSecurityStack — composition order', () => {
     process.env.PI_THRESHOLD = '0.42';
     const stack = buildSecurityStack({ scope });
     const pid = stack.inputProcessors.find(p => p.id === 'prompt-injection-detector') as never as {
-      threshold: number;
+      detector: { threshold: number };
     };
-    expect(pid.threshold).toBe(0.42);
+    expect(pid.detector.threshold).toBe(0.42);
   });
 
   it('PIIDetector config: mask + regex-only types (LLM-only name/address/dob excluded)', () => {
@@ -320,7 +338,13 @@ describe('registerSecurityStackStatus (banner, §3.7)', () => {
     setProviderKey();
     registerSecurityStackStatus(active as never, true);
     expect(active[0]).toMatchObject({ name: 'Guardrails', active: true });
-    expect(String(active[0].detail)).toContain('injection|pii|token-limit|cache active (block)');
+    expect(String(active[0].detail)).toContain('injection|pii|token-limit|cache active (graceful)');
+
+    const blocking: Array<Record<string, unknown>> = [];
+    process.env.INJECTION_GUARD_MODE = 'block';
+    registerSecurityStackStatus(blocking as never, true);
+    expect(String(blocking[0].detail)).toContain('injection|pii|token-limit|cache active (block)');
+    delete process.env.INJECTION_GUARD_MODE;
 
     const inert: Array<Record<string, unknown>> = [];
     clearProviderKeys();
@@ -356,5 +380,56 @@ describe('scanToolOutputForInjection (web-fetch scanning boundary, Q3)', () => {
     setProviderKey();
     process.env.SECURITY_PROCESSORS = 'off';
     await expect(scanToolOutputForInjection('anything', 'https://x.test')).resolves.toBeUndefined();
+  });
+});
+
+describe('guard order — incident regression (2026-09-18)', () => {
+  interface TestMessage {
+    id: string;
+    role: string;
+    content: { parts: Array<{ type: string; text: string }> };
+  }
+
+  const userMessage = (text: string): TestMessage[] => [
+    { id: 'm1', role: 'user', content: { parts: [{ type: 'text', text }] } },
+  ];
+
+  const textOf = (message: TestMessage): string => message.content.parts[0]?.text ?? '';
+
+  const call = (processor: unknown, messages: TestMessage[]): Promise<TestMessage[]> =>
+    (
+      processor as { processInput: (args: never) => Promise<TestMessage[]> }
+    ).processInput({
+      messages,
+      abort: () => {
+        throw new TripWire('unexpected abort');
+      },
+    } as never);
+
+  it('the injection scanner only ever sees raw user text — never the scope guard redirect note', async () => {
+    const seen: string[] = [];
+    const spyDetector = {
+      id: 'prompt-injection-detector',
+      processInput: async (args: { messages: TestMessage[] }) => {
+        seen.push(textOf(args.messages.at(-1)!));
+        return args.messages;
+      },
+    };
+    const injectionGuard = createInjectionGuard({ scope, detector: spyDetector as never });
+    const scopeGuard = createScopeGuard({
+      ...scope,
+      classify: async () => ({ inScope: false }),
+    });
+
+    const rawQuestion = '¿qué pasó en la resurrección de Cristo?';
+    // Orden real de la stack (order rule): primero el escáner de input crudo,
+    // después el guard que MUTA el mensaje.
+    const afterInjection = await call(injectionGuard, userMessage(rawQuestion));
+    const afterScope = await call(scopeGuard, afterInjection);
+
+    expect(seen).toEqual([rawQuestion]);
+    // La nota del scope guard se escribe DESPUÉS del escáner y nada la reclasifica.
+    expect(textOf(afterScope.at(-1)!)).not.toContain('resurrección');
+    expect(textOf(afterScope.at(-1)!)).toContain('no corresponde');
   });
 });
