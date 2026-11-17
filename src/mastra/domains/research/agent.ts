@@ -1,21 +1,26 @@
-import { buildDomainAgent, createScopeGuard } from '../../shared/agents/build-agent';
-import { buildSecurityStack } from '../../shared/processors/security-stack';
-import { webSearchTool } from './tools/web-search';
-import { webFetchTool } from './tools/web-fetch';
-import { summarizeTool } from './tools/summarize';
-import { researchScope } from './scope';
-import { researchSettings } from './config';
+// Mastra Agent: https://mastra.ai/docs/agents/overview
+import { Agent } from '@mastra/core/agent';
+import { buildMemory } from '../../shared/agents/memory';
+import { inputProcessors, outputProcessors } from '../../shared/agents/security';
+import { loadMcpToolsFor } from '../../shared/config/mcp';
+import { agentModel } from '../../shared/config/model';
 import { researchInstructions } from './instructions';
+import { summarizeTool, webFetchTool, webSearchTool } from './tools';
 
-// Kept for backward compat — structural wiring tests reference these exports
-export const researchScopeGuard = createScopeGuard(researchScope);
-export const researchSecurityStack = buildSecurityStack({ scope: researchScope });
-
-// Static local tools: the MCP (research-routed) tools arrive via `connectors.mcp`
-// and `search_knowledge` is NOT wired — `rag: true` opts into it (opt-in contract).
-export const researchAgent = buildDomainAgent({
-  scope: researchScope,
-  instructionsBody: researchInstructions,
-  tools: { web_search: webSearchTool, web_fetch: webFetchTool, summarize: summarizeTool },
-  ...researchSettings,
+export const researchAgent = new Agent({
+  id: 'research-agent',
+  name: 'Research Agent',
+  description: 'Web research: search, fetch and summarize sources.',
+  instructions: researchInstructions,
+  model: agentModel.research(),
+  tools: async () => ({
+    ...(await loadMcpToolsFor('research')),
+    web_search: webSearchTool,
+    web_fetch: webFetchTool,
+    summarize: summarizeTool,
+  }),
+  memory: buildMemory(),
+  inputProcessors: inputProcessors(),
+  outputProcessors: outputProcessors(),
+  defaultOptions: { maxSteps: 50, autoResumeSuspendedTools: true },
 });

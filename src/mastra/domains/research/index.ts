@@ -1,11 +1,6 @@
-export { researchScope } from './scope';
-export { researchSettings, deepResearchSettings } from './config';
-export { researchInstructions } from './instructions';
-export { researchAgent, researchScopeGuard } from './agent';
-export { researchSecurityStack } from './agent';
-export { webSearchTool, webFetchTool, summarizeTool } from './tools';
+export { researchAgent } from './agent';
 export { deepResearchWorkflow } from './workflows/deep-research';
-export { relevanceScorer } from './scorers/relevance-scorer';
-export * from './types';
-export * from './events';
-export * from './handlers';
+export { searchWeb } from './tools/web-search';
+export { fetchPage } from './tools/web-fetch';
+export { summarizeText } from './functions/summarize-text';
+export { webSearchTool, webFetchTool, summarizeTool } from './tools';

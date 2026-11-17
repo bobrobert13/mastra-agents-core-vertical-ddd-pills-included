@@ -1,9 +1,20 @@
+// Mastra tools: https://mastra.ai/docs/agents/tools
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { logger } from '../../../shared/logger';
-import { isFail } from '../../../shared/handlers';
-import { fetchDuckDuckGo } from '../functions/web-io';
 import { mapDuckDuckGoResults } from '../functions/web-parse';
+
+export async function searchWeb(
+  query: string,
+  maxResults = 5
+): Promise<Array<{ title: string; url: string; snippet: string }>> {
+  const response = await fetch(
+    `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1`
+  );
+  if (!response.ok) {
+    throw new Error(`DuckDuckGo API error: ${response.status}`);
+  }
+  return mapDuckDuckGoResults(await response.json(), maxResults);
+}
 
 export const webSearchTool = createTool({
   id: 'research-web-search',
@@ -21,16 +32,7 @@ export const webSearchTool = createTool({
       })
     ),
   }),
-  execute: async ({ query, maxResults = 5 }) => {
-    try {
-      const result = await fetchDuckDuckGo(query);
-      if (isFail(result)) throw result.error;
-      return { results: mapDuckDuckGoResults(result.unwrap(), maxResults) };
-    } catch (error) {
-      // Silent degradation (unchanged contract): a failed search is an empty
-      // result set, never a thrown error.
-      logger.error('Web search error:', error);
-      return { results: [] };
-    }
-  },
+  execute: async ({ query, maxResults = 5 }) => ({
+    results: await searchWeb(query, maxResults),
+  }),
 });

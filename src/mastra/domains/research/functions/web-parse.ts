@@ -1,10 +1,4 @@
-/**
- * Pure web-parsing helpers (no I/O): HTML → text, `<title>` extraction and the
- * DuckDuckGo response mapping. Extracted verbatim from the tools so the network
- * side (`web-io.ts`) and the tool adapters stay free of parsing logic.
- */
-
-/** Strip script/style/tags and collapse whitespace (the tools' old pipeline). */
+/** Strip script/style/tags and collapse whitespace. */
 export function htmlToText(html: string): string {
   return html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
@@ -20,14 +14,12 @@ export function extractHtmlTitle(html: string): string | undefined {
   return titleMatch ? titleMatch[1] : undefined;
 }
 
-/** One mapped search result (mirrors the web-search tool outputSchema item). */
 export interface WebSearchResult {
   title: string;
   url: string;
   snippet: string;
 }
 
-/** Only the DuckDuckGo fields this mapper reads (all optional by construction). */
 interface DuckDuckGoTopic {
   Text?: string;
   FirstURL?: string;
@@ -45,7 +37,6 @@ export function mapDuckDuckGoResults(data: unknown, maxResults: number): WebSear
   const payload = (data ?? {}) as DuckDuckGoResponse;
   const results: WebSearchResult[] = [];
 
-  // Add abstract if available
   if (payload.Abstract) {
     results.push({
       title: payload.Heading || 'Summary',
@@ -54,7 +45,6 @@ export function mapDuckDuckGoResults(data: unknown, maxResults: number): WebSear
     });
   }
 
-  // Add related topics
   if (payload.RelatedTopics && Array.isArray(payload.RelatedTopics)) {
     for (const topic of payload.RelatedTopics.slice(0, maxResults - results.length)) {
       if (topic.Text && topic.FirstURL) {

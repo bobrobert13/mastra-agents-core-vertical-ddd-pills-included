@@ -1,9 +1,3 @@
-/**
- * Pure extractive summarizer — the exact algorithm previously inlined in
- * `tools/summarize.ts`. Sentence split, accumulate whole sentences up to
- * `maxLength`, then a `'...'` truncation fallback; the tool is now a thin
- * adapter over this.
- */
 export interface SummaryOutput {
   summary: string;
   originalLength: number;
@@ -21,7 +15,6 @@ export function summarizeText(text: string, maxLength: number): SummaryOutput {
     };
   }
 
-  // Take first few sentences up to maxLength
   let summary = '';
   for (const sentence of sentences) {
     const candidate = summary + sentence.trim() + '. ';
@@ -32,12 +25,10 @@ export function summarizeText(text: string, maxLength: number): SummaryOutput {
     }
   }
 
-  // If no sentences fit, truncate the first one
   if (!summary && sentences.length > 0) {
     summary = sentences[0].trim().substring(0, maxLength - 3) + '...';
   }
 
-  // Ensure summary doesn't exceed maxLength
   if (summary.length > maxLength) {
     summary = summary.substring(0, maxLength - 3) + '...';
   }

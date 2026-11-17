@@ -1,3 +1,4 @@
+// Mastra tools: https://mastra.ai/docs/agents/tools
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { summarizeText } from '../functions/summarize-text';
@@ -14,6 +15,5 @@ export const summarizeTool = createTool({
     originalLength: z.number(),
     summaryLength: z.number(),
   }),
-  // Thin adapter — the algorithm lives in the pure `summarizeText` function.
   execute: async ({ text, maxLength = 200 }) => summarizeText(text, maxLength),
 });
