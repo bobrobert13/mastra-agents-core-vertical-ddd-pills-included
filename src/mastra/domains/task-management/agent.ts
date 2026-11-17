@@ -1,23 +1,24 @@
-import { buildDomainAgent, createScopeGuard } from '../../shared/agents/build-agent';
-import { buildSecurityStack } from '../../shared/processors/security-stack';
-import { createTaskTool } from './tools/create-task';
-import { updateTaskTool } from './tools/update-task';
-import { scheduleTaskTool } from './tools/schedule-task';
-import { taskManagementScope } from './scope';
-import { taskManagementSettings } from './config';
+// Mastra Agent: https://mastra.ai/docs/agents/overview
+import { Agent } from '@mastra/core/agent';
+import { buildMemory } from '../../shared/agents/memory';
+import { inputProcessors, outputProcessors } from '../../shared/agents/security';
+import { agentModel } from '../../shared/config/model';
 import { taskManagementInstructions } from './instructions';
+import { createTaskTool, scheduleTaskTool, updateTaskTool } from './tools';
 
-// Kept for backward compat — structural wiring tests reference these exports
-export const taskManagementScopeGuard = createScopeGuard(taskManagementScope);
-export const taskManagementSecurityStack = buildSecurityStack({ scope: taskManagementScope });
-
-export const taskManagementAgent = buildDomainAgent({
-  scope: taskManagementScope,
-  instructionsBody: taskManagementInstructions,
+export const taskManagementAgent = new Agent({
+  id: 'task-management-agent',
+  name: 'Task Management Agent',
+  description: 'Create, update and schedule tasks.',
+  instructions: taskManagementInstructions,
+  model: agentModel.tasks(),
   tools: {
     create_task: createTaskTool,
     update_task: updateTaskTool,
     schedule_task: scheduleTaskTool,
   },
-  ...taskManagementSettings,
+  memory: buildMemory(),
+  inputProcessors: inputProcessors(),
+  outputProcessors: outputProcessors(),
+  defaultOptions: { maxSteps: 30, autoResumeSuspendedTools: true },
 });

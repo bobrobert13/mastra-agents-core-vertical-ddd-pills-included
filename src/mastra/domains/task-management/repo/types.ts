@@ -1,10 +1,5 @@
 import type { Task, TaskStatus, TaskPriority } from '../entities/task';
 
-/**
- * Repository contracts for the `app_tasks` custom table (ADR-008, spec 05 §3.2).
- * Public surface is unchanged — the barrel re-exports exactly the same names.
- */
-
 export interface CreateTaskInput {
   title: string;
   description?: string;
@@ -20,8 +15,6 @@ export interface UpdateTaskPatch {
   priority?: TaskPriority;
   dueDate?: string;
   scheduleId?: string;
-  /** Optimistic lock (Scenario 5): the UPDATE only lands while the row is still at this version. */
-  expectVersion?: number;
 }
 
 export interface ListTasksFilter {
@@ -39,7 +32,7 @@ export interface TaskRepository {
   createTask(input: CreateTaskInput): Promise<Task>;
   getTask(id: string): Promise<Task | null>;
   listTasks(filter?: ListTasksFilter): Promise<Task[]>;
-  /** null = row missing OR expectVersion mismatch (caller distinguishes via a follow-up getTask). */
+  /** null = row missing. */
   updateTask(id: string, patch: UpdateTaskPatch): Promise<Task | null>;
   attachSchedule(id: string, scheduleId: string): Promise<Task | null>;
 }
@@ -56,5 +49,4 @@ export interface TaskRow {
   schedule_id: string | null;
   created_at: string;
   updated_at: string;
-  version: number;
 }

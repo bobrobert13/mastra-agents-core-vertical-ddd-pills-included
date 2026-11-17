@@ -1,65 +1,54 @@
+// Mastra tools: https://mastra.ai/docs/agents/tools
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { isFail } from '../../../shared/handlers';
-import { executeTaskUpdate, updateTaskInputSchema } from '../functions/update-task';
-import { TaskConflictError } from '../handlers/errors';
-import { toUpdateFailureReason } from '../handlers/responses';
+import { requireAppDb } from '../../../shared/config/db';
+import { createTaskRepository } from '../repo';
+
+const inputSchema = z.object({
+  taskId: z.string().describe('Task ID to update'),
+  title: z.string().optional().describe('New task title'),
+  description: z.string().optional().describe('New task description'),
+  status: z.enum(['pending', 'in-progress', 'completed']).optional(),
+  priority: z.enum(['low', 'medium', 'high']).optional(),
+});
 
 export const updateTaskTool = createTool({
   id: 'task-update',
-  description: 'Update an existing task (guarded write with optimistic locking)',
-  inputSchema: updateTaskInputSchema,
+  description: 'Update an existing task',
+  inputSchema,
   outputSchema: z.object({
     taskId: z.string(),
     updated: z.boolean(),
-    reason: z.enum(['NOT_FOUND', 'CONFLICT']).optional(),
+    reason: z.literal('NOT_FOUND').optional(),
     message: z.string(),
     task: z
       .object({
         status: z.string(),
         priority: z.string(),
-        version: z.number(),
         updatedAt: z.string(),
       })
       .optional(),
   }),
-  execute: async input => {
-    const { taskId } = input;
-    const result = await executeTaskUpdate(input);
+  execute: async ({ taskId, ...patch }) => {
+    const db = await requireAppDb('task-update');
+    const repo = createTaskRepository(db);
 
-    if (isFail(result)) {
-      const error = result.error;
-      const reason = toUpdateFailureReason(error);
-      // Infrastructure failures (DB down, …) keep propagating instead of
-      // masquerading as a NOT_FOUND/CONFLICT business outcome.
-      if (reason === undefined) throw error;
-      return {
-        taskId,
-        updated: false,
-        reason,
-        message: error.message,
-        ...(error instanceof TaskConflictError && error.current
-          ? {
-              task: {
-                status: error.current.status,
-                priority: error.current.priority,
-                version: error.current.version ?? 0,
-                updatedAt: error.current.updatedAt.toISOString(),
-              },
-            }
-          : {}),
-      };
+    if (!(await repo.getTask(taskId))) {
+      return { taskId, updated: false, reason: 'NOT_FOUND' as const, message: `Task ${taskId} not found.` };
     }
 
-    const task = result.unwrap();
+    const task = await repo.updateTask(taskId, patch);
+    if (!task) {
+      return { taskId, updated: false, reason: 'NOT_FOUND' as const, message: `Task ${taskId} not found.` };
+    }
+
     return {
       taskId,
       updated: true,
-      message: `Task ${taskId} updated successfully (version ${task.version}).`,
+      message: `Task ${taskId} updated successfully.`,
       task: {
         status: task.status,
         priority: task.priority,
-        version: task.version ?? 0,
         updatedAt: task.updatedAt.toISOString(),
       },
     };

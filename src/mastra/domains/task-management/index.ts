@@ -1,17 +1,13 @@
-export { taskManagementScope } from './scope';
-export { taskManagementSettings } from './config';
-export { taskManagementInstructions } from './instructions';
-export { taskManagementAgent, taskManagementScopeGuard } from './agent';
-export { taskManagementSecurityStack } from './agent';
-export { createTaskTool, updateTaskTool, scheduleTaskTool } from './tools';
-export * from './handlers';
-export * from './entities/task';
-export * from './events';
-export {
-  createTaskRepository,
-  type TaskRepository,
-  type CreateTaskInput,
-  type UpdateTaskPatch,
-  type ListTasksFilter,
-} from './repo';
+export { taskManagementAgent } from './agent';
 export { dailyDigestWorkflow } from './workflows/daily-digest';
+export { createTaskTool } from './tools/create-task';
+export { updateTaskTool } from './tools/update-task';
+export { scheduleTaskTool } from './tools/schedule-task';
+export { createTaskRepository } from './repo';
+export type { Task } from './entities/task';
+export type {
+  CreateTaskInput,
+  ListTasksFilter,
+  TaskRepository,
+  UpdateTaskPatch,
+} from './repo';

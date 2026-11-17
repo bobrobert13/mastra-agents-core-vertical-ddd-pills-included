@@ -10,7 +10,6 @@ import type {
   UpdateTaskPatch,
 } from './types';
 
-/** Map a raw driver row onto the `Task` entity (optional fields collapse to `undefined`). */
 function toTask(row: TaskRow): Task {
   return {
     id: row.id,
@@ -23,15 +22,9 @@ function toTask(row: TaskRow): Task {
     updatedAt: new Date(row.updated_at),
     scheduleId: row.schedule_id ?? undefined,
     resourceId: row.resource_id,
-    version: Number(row.version),
   };
 }
 
-/**
- * `createTaskRepository(db)` — the full CRUD over `app_tasks`, dialect-portable
- * through `db` (`$n` placeholders for pg, `?` for libsql). Schema bootstrap
- * lives in `schema.ts`; the type contracts live in `types.ts`.
- */
 export function createTaskRepository(db: AppDatabase): TaskRepository {
   /** `$n` for pg, `?` for libsql; called in param-append order. */
   const ph = db.dialect === 'pg' ? (i: number): string => `$${i + 1}` : (_i: number): string => '?';
@@ -46,8 +39,15 @@ export function createTaskRepository(db: AppDatabase): TaskRepository {
     return rows.map(toTask);
   }
 
+  async function getTask(id: string): Promise<Task | null> {
+    await ensureSchema();
+    const tasks = await selectOne([`id = ${ph(0)}`], [id]);
+    return tasks[0] ?? null;
+  }
+
   return {
     ensureSchema,
+    getTask,
 
     async createTask(input: CreateTaskInput): Promise<Task> {
       await ensureSchema();
@@ -63,7 +63,6 @@ export function createTaskRepository(db: AppDatabase): TaskRepository {
         schedule_id: null,
         created_at: now,
         updated_at: now,
-        version: 1,
       };
       const params: unknown[] = [
         row.id,
@@ -76,18 +75,11 @@ export function createTaskRepository(db: AppDatabase): TaskRepository {
         row.schedule_id,
         row.created_at,
         row.updated_at,
-        row.version,
       ];
-      const sql = `INSERT INTO app_tasks (id, resource_id, title, description, status, priority, due_date, schedule_id, created_at, updated_at, version)
+      const sql = `INSERT INTO app_tasks (id, resource_id, title, description, status, priority, due_date, schedule_id, created_at, updated_at)
 VALUES (${params.map((_, i) => ph(i)).join(', ')})`;
       await db.execute(sql, params);
       return toTask(row);
-    },
-
-    async getTask(id: string): Promise<Task | null> {
-      await ensureSchema();
-      const tasks = await selectOne([`id = ${ph(0)}`], [id]);
-      return tasks[0] ?? null;
     },
 
     async listTasks(filter: ListTasksFilter = {}): Promise<Task[]> {
@@ -119,25 +111,20 @@ VALUES (${params.map((_, i) => ph(i)).join(', ')})`;
       if (patch.priority !== undefined) set('priority', patch.priority);
       if (patch.dueDate !== undefined) set('due_date', patch.dueDate);
       if (patch.scheduleId !== undefined) set('schedule_id', patch.scheduleId);
-      if (sets.length === 0) return this.getTask(id);
+      if (sets.length === 0) return getTask(id);
 
       sets.push(`updated_at = ${ph(params.length)}`);
       params.push(new Date().toISOString());
-      sets.push('version = version + 1');
 
-      let where = `id = ${ph(params.length)}`;
+      const where = `id = ${ph(params.length)}`;
       params.push(id);
-      if (patch.expectVersion !== undefined) {
-        where += ` AND version = ${ph(params.length)}`;
-        params.push(patch.expectVersion);
-      }
 
       const { affectedRows } = await db.execute(
         `UPDATE app_tasks SET ${sets.join(', ')} WHERE ${where}`,
         params
       );
       if (affectedRows === 0) return null;
-      return this.getTask(id);
+      return getTask(id);
     },
 
     async attachSchedule(id: string, scheduleId: string): Promise<Task | null> {

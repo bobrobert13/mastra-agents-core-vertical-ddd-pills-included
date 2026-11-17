@@ -1,9 +1,6 @@
 import { TASK_INTERVAL_RE } from '../config';
 
-/**
- * Back-compat interval → cron mapping used by `schedule_task` (spec 05 §3.4).
- * Pure and side-effect free so it is trivially unit-testable.
- */
+/** Back-compat interval → cron mapping used by `schedule_task`. Pure and side-effect free. */
 export function intervalToCron(interval: string): string | null {
   const match = TASK_INTERVAL_RE.exec(interval.trim());
   if (!match) return null;

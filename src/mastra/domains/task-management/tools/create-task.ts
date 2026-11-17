@@ -1,10 +1,9 @@
+// Mastra tools: https://mastra.ai/docs/agents/tools
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import { requireAppDb } from '../../../shared/config/db';
 import { logger } from '../../../shared/logger';
-import { eventBus, makeEvent } from '../../../shared/events';
 import { createTaskRepository } from '../repo';
-import { taskCreatedEvent } from '../events';
 
 export const createTaskTool = createTool({
   id: 'task-create',
@@ -26,21 +25,9 @@ export const createTaskTool = createTool({
   execute: async ({ title, description, priority = 'medium', dueDate }, context) => {
     const db = await requireAppDb('task-create');
     const repo = createTaskRepository(db);
-    // ToolExecutionContext has no top-level resourceId — conversation
-    // identity arrives on context.agent (spec 05 §3.0).
     const resourceId = context?.agent?.resourceId ?? 'default';
 
     const task = await repo.createTask({ title, description, priority, dueDate, resourceId });
-
-    // Emit AFTER the commit — a failed insert must not announce a task.
-    const event = makeEvent(taskCreatedEvent, {
-      taskId: task.id,
-      title: task.title,
-      priority: task.priority,
-      timestamp: task.createdAt,
-    });
-    await eventBus.publish(event);
-
     logger.info(`[create_task] persisted task ${task.id} (resource ${resourceId})`);
 
     return {
