@@ -1,3 +1,4 @@
+// Mastra server (custom routes): https://mastra.ai/docs/server/overview
 import { chatRoute } from '@mastra/ai-sdk';
 
 /**
