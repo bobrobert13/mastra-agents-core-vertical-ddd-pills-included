@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module';
 import { createClient, type Client as LibSqlClient, type InValue } from '@libsql/client';
+import { ErrorCategory, ErrorDomain, MastraError } from '@mastra/core/error';
 import { logger } from '../logger';
 
 /**
@@ -44,12 +45,7 @@ export interface AppDatabase {
  *   DATABASE_URL (postgres…) → pg
  *   LIBSQL_URL               → libsql custom location
  *   nothing                  → libsql local file (zero-config)
- *
- * TODO(spec-05, orchestrator): unify with storage.ts — buildStorage() should
- * call resolveDbTarget() too, so the DATABASE_URL/LIBSQL_URL precedence logic
- * exists exactly once. storage.ts is owned by the composition-root change
- * wave, so this file mirrors its behavior for now.
- */
+ * */
 export function resolveDbTarget(env: NodeJS.ProcessEnv = process.env): DbTarget {
   const databaseUrl = env.DATABASE_URL;
   if (databaseUrl && databaseUrl.startsWith('postgres')) {
@@ -153,7 +149,6 @@ export function getAppDb(): Promise<AppDatabase | null> {
  * `if (!db) throw new MastraError(...)` boilerplate across every tool.
  */
 export async function requireAppDb(toolId: string): Promise<AppDatabase> {
-  const { MastraError, ErrorDomain, ErrorCategory } = await import('@mastra/core/error');
   const db = await getAppDb();
   if (!db) {
     throw new MastraError({

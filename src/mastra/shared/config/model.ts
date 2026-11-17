@@ -1,75 +1,18 @@
-/**
- * Provider-agnostic model resolution.
- *
- * The boilerplate ships NO baked-in provider preference: the actual model
- * comes from env vars, so the same code runs on DeepInfra, OpenAI, Anthropic,
- * Google, xAI, Ollama or any Mastra-supported gateway — and per-agent overrides
- * are supported for cost/latency tuning.
- *
- * Precedence (per agent):  MODEL_<AGENT>  >  MODEL  >  DEFAULT_MODEL
- * Memory summarizer:       OBSERVATIONAL_MEMORY_MODEL  >  MODEL  >  DEFAULT_MODEL
- *
- * Model ids use Mastra's "provider/model-id" format, e.g.
- *   deepinfra/deepseek-ai/DeepSeek-V4-Flash-0731
- *   openai/gpt-4o-mini
- *   anthropic/claude-sonnet-4-5
- *   ollama/llama3.1
- *
- * Embedder resolution lives in `embedder.ts` (re-exported below so the existing
- * `from './model'` imports keep resolving) — model ids and embedder declaration
- * change for different reasons.
- */
-
-export type ModelKey =
-  'research' | 'tasks' | 'files' | 'comms' | 'observational-memory' | 'scope-guard';
-
-/** Last-resort default so the app constructs agents without any env config. */
+// Mastra model routing: https://mastra.ai/docs/models
+export type ModelKey = 'research' | 'tasks' | 'files';
 export const DEFAULT_MODEL = 'openai/gpt-4o-mini';
 
 function env(name: string): string | undefined {
-  const value = process.env[name];
-  return value && value.trim() !== '' ? value.trim() : undefined;
+  const value = process.env[name]?.trim();
+  return value || undefined;
 }
 
-/** Resolve the model id for one agent key, following the precedence chain. */
 export function resolveModel(key: ModelKey): string {
-  if (key === 'observational-memory') {
-    return env('OBSERVATIONAL_MEMORY_MODEL') ?? env('MODEL') ?? DEFAULT_MODEL;
-  }
-
-  const perAgent = env(`MODEL_${key.toUpperCase()}`);
-  if (perAgent) return perAgent;
-
-  return env('MODEL') ?? DEFAULT_MODEL;
+  return env(`MODEL_${key.toUpperCase()}`) ?? env('MODEL') ?? DEFAULT_MODEL;
 }
 
-/** Ready-to-use model string for a domain agent. */
 export const agentModel = {
   research: () => resolveModel('research'),
   tasks: () => resolveModel('tasks'),
   files: () => resolveModel('files'),
-  comms: () => resolveModel('comms'),
 };
-
-/** Model for Memory's observational/summarizer workloads. */
-export const memoryModel = () => resolveModel('observational-memory');
-
-/** Model for the scope-guard classifier (keep cheap: one extra call per turn). */
-export const guardModel = (): string => env('SCOPE_GUARD_MODEL') ?? env('MODEL') ?? DEFAULT_MODEL;
-
-/**
- * Model for LLM-as-judge eval scorers (spec 07 §3.2). NEVER hard-coded a
- * model string (gotcha #5): `EVAL_JUDGE_MODEL` > `MODEL` > `DEFAULT_MODEL`.
- * Consumed ONLY by the genuinely LLM-based judges (answer-relevancy,
- * faithfulness, hallucination, bias) — the code-based scorers
- * (completeness, tone, keyword-coverage, research-relevance) take no model.
- * Unset ⇒ defaults, never an error (zero-config rule).
- */
-export const judgeModel = (): string => env('EVAL_JUDGE_MODEL') ?? env('MODEL') ?? DEFAULT_MODEL;
-
-export {
-  resolveEmbedder,
-  embeddingModel,
-  type EmbedderResolution,
-  type EmbedderSource,
-} from './embedder';
