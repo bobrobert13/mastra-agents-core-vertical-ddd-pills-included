@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { summarizeText } from '../../../../../src/mastra/domains/research/functions/summarize-text';
 
 describe('summarizeText', () => {
@@ -12,7 +12,6 @@ describe('summarizeText', () => {
     const result = summarizeText(text, 100);
     expect(result.summary).toBe('Hello world. Goodbye.');
     expect(result.originalLength).toBe(text.length);
-    // summaryLength measures the accumulator BEFORE the final trim (see impl).
     expect(result.summaryLength).toBe(22);
   });
 
