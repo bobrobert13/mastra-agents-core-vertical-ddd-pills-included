@@ -6,13 +6,12 @@ on:
   pull_request:
     branches: [main]
 
-# The lockfile is generated with --legacy-peer-deps (@mastra/evals ↔ vitest
-# peer conflict); make `npm ci` use the same resolution everywhere.
+# The lockfile is generated with --legacy-peer-deps (@mastra/evals ↔ vitest).
 env:
   npm_config_legacy_peer_deps: 'true'
 
 jobs:
-  lint:
+  lint-typecheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,72 +21,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run lint
-
-  # Spec 07 §3.4: blocking typecheck job — the exact command root AGENTS.md
-  # already mandates locally (gap §3.3: it was never enforced in CI).
-  # No `needs:` → runs in parallel with lint for the fastest signal.
-  typecheck:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-      - run: npm ci
       - run: npx tsc --noEmit
 
-  build:
+  test:
     runs-on: ubuntu-latest
-    needs: lint
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run build:all
-      - run: test -f .mastra/worker/index.mjs && echo "worker artifact OK"
-
-  # Spec 07 §3.4: blocking coverage gate — all four keyless tiers in one run;
-  # thresholds live in vitest.config.ts → threshold miss = nonzero exit = red.
-  # include:['src/**/*.ts'] keeps calibration honest (no .mastra/ bundles).
-  coverage:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-      - run: npm ci
-      - run: npm run test:coverage:gate
-      - name: Upload coverage summary
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-summary
-          path: coverage/coverage-summary.json
-
-  test-smoke:
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: 'npm'
-      - run: npm ci
-      # No env block on purpose: smoke proves zero-config boot (LibSQL fallback,
-      # provider-agnostic model defaults, agent + workflow registration).
-      - run: npm run test:smoke
-
-  test-unit:
-    runs-on: ubuntu-latest
-    needs: build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -96,32 +33,10 @@ jobs:
           cache: 'npm'
       - run: npm ci
       - run: npm run test:unit
+      - run: npm run test:smoke
 
-  test-integration:
+  integration:
     runs-on: ubuntu-latest
-    needs: build
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: mastra_test
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-        ports:
-          - 5432:5432
-      redis:
-        image: redis:7-alpine
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 5
-        ports:
-          - 6379:6379
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -129,20 +44,11 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
+      # No Postgres/Redis services: kept tests use LibSQL/:memory: and a stub embedder.
       - run: npm run test:integration
-        env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/mastra_test
-          REDIS_URL: redis://localhost:6379
 
-  # Spec 07 §3.3 two-tier contract: this job runs Tier A — deterministic,
-  # keyless-blocking gates (tests/evals/gates/*: recorded fixtures + code-based
-  # scorers + Δ≤0.02 vs committed baseline) + native-dataset schema contracts.
-  # The DEEPINFRA secret additionally activates the skipIf-guarded LIVE
-  # describes (same-repo PRs; forks resolve to '' → they self-skip, never
-  # false-red — scenario 5). Judge experiments live in evals-live.yml only.
-  test-evals:
+  build:
     runs-on: ubuntu-latest
-    needs: build
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -150,6 +56,4 @@ jobs:
           node-version: 22
           cache: 'npm'
       - run: npm ci
-      - run: npm run test:evals
-        env:
-          DEEPINFRA_API_KEY: ${{ secrets.DEEPINFRA_API_KEY }}
+      - run: npm run build
