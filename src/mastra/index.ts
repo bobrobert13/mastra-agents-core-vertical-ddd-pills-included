@@ -1,83 +1,54 @@
 import { Mastra } from '@mastra/core/mastra';
-
-import { validateEnv } from './shared/config/env';
-import { buildInfrastructure } from './shared/config/infrastructure';
-import { detectSchedules } from './shared/config/schedules';
-import { logServiceAvailability } from './shared/config/service-status';
-import { VECTOR_STORE_NAME } from './shared/config/vectors';
+import { indexKnowledgeWorkflow, knowledgeQueryTool } from './domains/knowledge';
+import { fileOperationsAgent } from './domains/file-operations';
+import { deepResearchWorkflow, researchAgent } from './domains/research';
+import { dailyDigestWorkflow, taskManagementAgent } from './domains/task-management';
 import { buildMcpServer } from './mcp/server';
 import { buildServerSurface } from './routes';
-import { buildEvalScorers } from './shared/evals';
+import { buildInfrastructure } from './shared/config/infrastructure';
+import { VECTOR_STORE_NAME } from './shared/config/vectors';
+import { logger } from './shared/logger';
 
-// Import domains
-import { researchAgent, deepResearchWorkflow } from './domains/research';
-import { taskManagementAgent, dailyDigestWorkflow } from './domains/task-management';
-import { fileOperationsAgent } from './domains/file-operations';
-import { communicationAgent } from './domains/communication';
-import { indexKnowledgeWorkflow, knowledgeQueryTool } from './domains/knowledge';
+const infra = buildInfrastructure();
+const { mcpServer } = buildMcpServer();
+const surface = buildServerSurface();
+const port = Number(process.env.MASTRA_PORT ?? 4111);
 
-// All infrastructure is optional and driven by env vars (see shared/config/infrastructure.ts)
-// Fail-fast ONLY on malformed PRESENT env values (spec 08); absence is always legal.
-validateEnv();
-
-const { storage, vectors, observability, pubsub, auth, mcpClient, services } =
-  buildInfrastructure();
-
-// MCP server (spec 04 §3.3): composition-layer module — the ONLY place allowed to
-// import domain barrels for MCPServer assembly (ADR-007 carve-out); off unless ENABLE_MCP_SERVER=true.
-const { mcpServer } = await buildMcpServer(services);
-
-// NOTE: the `server` object literal must contain NO local identifiers —
-// `mastra dev` statically extracts this literal into a standalone
-// .mastra/output/server-config.mjs where locals are out of scope
-// (a spread like `...(auth && { auth })` breaks dev boot with
-// "auth is not defined"). Attach auth imperatively instead.
 const serverConfig: Record<string, unknown> = {
-  port: parseInt(process.env.MASTRA_PORT || '4111', 10),
+  port: Number.isInteger(port) && port > 0 && port < 65536 ? port : 4111,
   host: process.env.MASTRA_HOST || '0.0.0.0',
+  apiRoutes: surface.apiRoutes,
 };
-if (auth) serverConfig.auth = auth;
-// Custom HTTP surface (spec 08): { cors?, middleware, apiRoutes } — Object.assign keeps
-// the server literal free of local identifiers (dev-bundler extraction rule above).
-const surface = buildServerSurface(services); // pushes CORS / Rate limiting / Webhook signing rows
-Object.assign(serverConfig, surface);
+if (infra.auth) serverConfig.auth = infra.auth;
+if (surface.cors) serverConfig.cors = surface.cors;
 
 export const mastra = new Mastra({
-  // fastembed ships platform .node binaries; the bundlers (esp. worker build)
-  // cannot analyze them — keep them external (resolved from node_modules at runtime)
-  bundler: {
-    externals: ['@anush008/tokenizers'],
-  },
-  // spec 07 §3.2: map KEYS are the IDs startExperiment resolves + Studio lists
-  scorers: buildEvalScorers(),
   agents: {
     research: researchAgent,
     tasks: taskManagementAgent,
     files: fileOperationsAgent,
-    comms: communicationAgent,
   },
   workflows: {
     'deep-research': deepResearchWorkflow,
     'daily-digest': dailyDigestWorkflow,
     'index-knowledge': indexKnowledgeWorkflow,
   },
-  // null-safe spreads (spec 03 §3.9): the store follows DATABASE_URL/LIBSQL_URL;
-  // the knowledge tool is null when no embedder is available (degrade, never crash)
-  ...(vectors.store && { vectors: { [VECTOR_STORE_NAME]: vectors.store } }),
+  ...(infra.vectors.store && { vectors: { [VECTOR_STORE_NAME]: infra.vectors.store } }),
   ...(knowledgeQueryTool && { tools: { search_knowledge: knowledgeQueryTool } }),
-  storage,
-  ...(observability && { observability }),
-  ...(pubsub && { pubsub }),
-  // proxies gate on mcpClient, NOT on mcpServer: shipped defaults (ENABLE_MCP_SERVER unset)
-  // + MCP_SERVERS set must still surface external servers in Studio (spec 04 §3.3):
-  ...((mcpServer || mcpClient) && {
+  storage: infra.storage,
+  ...(infra.observability && { observability: infra.observability }),
+  ...(infra.pubsub && { pubsub: infra.pubsub }),
+  ...((mcpServer || infra.mcpClient) && {
     mcpServers: {
       ...(mcpServer && { boilerplate: mcpServer }),
-      ...(mcpClient?.toMCPServerProxies() ?? {}),
+      ...(infra.mcpClient?.toMCPServerProxies() ?? {}),
     },
   }),
   server: serverConfig,
 });
 
-detectSchedules(services, mastra);
-logServiceAvailability(services);
+logger.info(`Storage: ${infra.storageDetail}`);
+logger.info(`Vectors: ${infra.vectors.store ? 'on' : 'off (set EMBEDDING_MODEL)'}`);
+logger.info(`Auth: ${infra.auth ? 'on' : 'off'}`);
+logger.info(`PubSub: ${infra.pubsub ? 'Redis Streams' : 'in-process'}`);
+logger.info(`MCP: ${mcpServer ? 'server + client' : infra.mcpClient ? 'client' : 'off'}`);
