@@ -15,8 +15,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@domains/*": ["./src/mastra/domains/*"],
-      "@shared/*": ["./src/mastra/shared/*"],
-      "@infrastructure/*": ["./src/mastra/infrastructure/*"]
+      "@shared/*": ["./src/mastra/shared/*"]
     }
   },
   "include": ["src/**/*", "tests/**/*"],
